@@ -1,24 +1,39 @@
 const std = @import("std");
+const print = std.debug.print;
+const http = std.http;
 
 pub fn main() !void {
-    // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
 
-    // stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
+    var client = http.Client{ .allocator = allocator };
+    defer client.deinit();
 
-    try stdout.print("Run `zig build test` to run the tests.\n", .{});
+    const url = "http://httpbin.org/get";
+    const uri = try std.Uri.parse(url);
+    const buf = try allocator.alloc(u8, 1024 * 1024 * 4);
+    defer allocator.free(buf);
 
-    try bw.flush(); // don't forget to flush!
-}
+    var req = try client.open(.GET, uri, .{
+        .server_header_buffer = buf,
+    });
+    defer req.deinit();
 
-test "simple test" {
-    var list = std.ArrayList(i32).init(std.testing.allocator);
-    defer list.deinit(); // try commenting this out and see if zig detects the memory leak!
-    try list.append(42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
+    try req.send();
+    try req.finish();
+    try req.wait();
+
+    var iter = req.response.iterateHeaders();
+    while (iter.next()) |header| {
+        std.debug.print("Name:{s}, Value:{s}\n", .{ header.name, header.value });
+    }
+
+    try std.testing.expectEqual(req.response.status, .ok);
+
+    var rdr = req.reader();
+    const body = try rdr.readAllAlloc(allocator, 1024 * 1024 * 4);
+    defer allocator.free(body);
+
+    print("Body:\n{s}\n", .{body});
 }
