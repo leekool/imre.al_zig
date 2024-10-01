@@ -57,25 +57,24 @@ const FetchReq = struct {
 };
 
 pub fn main() !void {
+    try getHtml("https://example.com");
+}
+
+pub fn getHtml(url: []const u8) !void {
     var gpa_impl = heap.GeneralPurposeAllocator(.{}){};
-    defer if (gpa_impl.deinit() == .leak) {
-        std.log.warn("Has leaked\n", .{});
-    };
     const gpa = gpa_impl.allocator();
+    defer if (gpa_impl.deinit() == .leak) {
+        std.log.warn("getHtml leaked", .{});
+    };
 
     var req = FetchReq.init(gpa);
     defer req.deinit();
 
-    const get_url = "https://example.com";
-
-    const res = try req.get(get_url, &.{});
+    const res = try req.get(url, &.{});
     const body = try req.body.toOwnedSlice();
     defer req.allocator.free(body);
 
-    if (res.status != .ok) {
-        std.log.err("GET request failed - {s}\n", .{body});
-        // std.os.exit(1);
-    }
+    if (res.status != .ok) std.log.err("getHtml failed: {s}\n", .{body});
 
-    std.debug.print("response - {s}\n", .{body});
+    std.debug.print("getHtml response: {s}\n", .{body});
 }
