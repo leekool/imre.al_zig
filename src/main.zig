@@ -1,39 +1,81 @@
 const std = @import("std");
-const print = std.debug.print;
 const http = std.http;
+const heap = std.heap;
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+const Client = http.Client;
+const RequestOptions = Client.RequestOptions;
 
-    var client = http.Client{ .allocator = allocator };
-    defer client.deinit();
+const FetchReq = struct {
+    const Self = @This();
+    const Allocator = std.mem.Allocator;
 
-    const url = "http://httpbin.org/get";
-    const uri = try std.Uri.parse(url);
-    const buf = try allocator.alloc(u8, 1024 * 1024 * 4);
-    defer allocator.free(buf);
+    allocator: Allocator,
+    client: std.http.Client,
+    body: std.ArrayList(u8),
 
-    var req = try client.open(.GET, uri, .{
-        .server_header_buffer = buf,
-    });
-    defer req.deinit();
-
-    try req.send();
-    try req.finish();
-    try req.wait();
-
-    var iter = req.response.iterateHeaders();
-    while (iter.next()) |header| {
-        std.debug.print("Name:{s}, Value:{s}\n", .{ header.name, header.value });
+    pub fn init(allocator: Allocator) Self {
+        const c = Client{ .allocator = allocator };
+        return Self{
+            .allocator = allocator,
+            .client = c,
+            .body = std.ArrayList(u8).init(allocator),
+        };
     }
 
-    try std.testing.expectEqual(req.response.status, .ok);
+    pub fn deinit(self: *Self) void {
+        self.client.deinit();
+        self.body.deinit();
+    }
 
-    var rdr = req.reader();
-    const body = try rdr.readAllAlloc(allocator, 1024 * 1024 * 4);
-    defer allocator.free(body);
+    pub fn get(self: *Self, url: []const u8, headers: []http.Header) !Client.FetchResult {
+        const fetch_options = Client.FetchOptions{
+            .location = Client.FetchOptions.Location{
+                .url = url,
+            },
+            .extra_headers = headers,
+            .response_storage = .{ .dynamic = &self.body },
+        };
 
-    print("Body:\n{s}\n", .{body});
+        const res = try self.client.fetch(fetch_options);
+        return res;
+    }
+
+    pub fn post(self: *Self, url: []const u8, body: []const u8, headers: []http.Header) !Client.FetchResult {
+        const fetch_options = Client.FetchOptions{
+            .location = Client.FetchOptions.Location{
+                .url = url,
+            },
+            .extra_headers = headers,
+            .method = .POST,
+            .payload = body,
+            .response_storage = .{ .dynamic = &self.body },
+        };
+
+        const res = try self.client.fetch(fetch_options);
+        return res;
+    }
+};
+
+pub fn main() !void {
+    var gpa_impl = heap.GeneralPurposeAllocator(.{}){};
+    defer if (gpa_impl.deinit() == .leak) {
+        std.log.warn("Has leaked\n", .{});
+    };
+    const gpa = gpa_impl.allocator();
+
+    var req = FetchReq.init(gpa);
+    defer req.deinit();
+
+    const get_url = "https://example.com";
+
+    const res = try req.get(get_url, &.{});
+    const body = try req.body.toOwnedSlice();
+    defer req.allocator.free(body);
+
+    if (res.status != .ok) {
+        std.log.err("GET request failed - {s}\n", .{body});
+        // std.os.exit(1);
+    }
+
+    std.debug.print("response - {s}\n", .{body});
 }
