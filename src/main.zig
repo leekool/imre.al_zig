@@ -57,24 +57,25 @@ const FetchReq = struct {
 };
 
 pub fn main() !void {
-    try getHtml("https://example.com");
+    var gpa = heap.GeneralPurposeAllocator(.{}){};
+    defer std.debug.assert(gpa.deinit() == .ok);
+    const allocator = gpa.allocator();
+
+    var html: []const u8 = undefined;
+    try getHtml("https://example.com", allocator, &html);
+    defer allocator.free(html);
+
+    std.debug.print("getHtml response: {s}\n", .{html});
 }
 
-pub fn getHtml(url: []const u8) !void {
-    var gpa_impl = heap.GeneralPurposeAllocator(.{}){};
-    const gpa = gpa_impl.allocator();
-    defer if (gpa_impl.deinit() == .leak) {
-        std.log.warn("getHtml leaked", .{});
-    };
-
-    var req = FetchReq.init(gpa);
+pub fn getHtml(url: []const u8, allocator: std.mem.Allocator, target: *[]const u8) !void {
+    var req = FetchReq.init(allocator);
     defer req.deinit();
 
     const res = try req.get(url, &.{});
-    const body = try req.body.toOwnedSlice();
-    defer req.allocator.free(body);
+    // const body = try req.body.toOwnedSlice();
+    // defer req.allocator.free(body);
+    target.* = try req.body.toOwnedSlice();
 
-    if (res.status != .ok) std.log.err("getHtml failed: {s}\n", .{body});
-
-    std.debug.print("getHtml response: {s}\n", .{body});
+    if (res.status != .ok) std.log.err("getHtml failed: {s}\n", .{target});
 }
