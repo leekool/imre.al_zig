@@ -61,21 +61,20 @@ pub fn main() !void {
     defer std.debug.assert(gpa.deinit() == .ok);
     const allocator = gpa.allocator();
 
-    var html: []const u8 = undefined;
-    try getHtml("https://example.com", allocator, &html);
+    const html = try getHtml("https://example.com", allocator);
     defer allocator.free(html);
 
     std.debug.print("getHtml response: {s}\n", .{html});
 }
 
-pub fn getHtml(url: []const u8, allocator: std.mem.Allocator, target: *[]const u8) !void {
+pub fn getHtml(url: []const u8, allocator: std.mem.Allocator) ![]const u8 {
     var req = FetchReq.init(allocator);
     defer req.deinit();
 
     const res = try req.get(url, &.{});
-    // const body = try req.body.toOwnedSlice();
-    // defer req.allocator.free(body);
-    target.* = try req.body.toOwnedSlice();
+    const body = try req.body.toOwnedSlice();
 
-    if (res.status != .ok) std.log.err("getHtml failed: {s}\n", .{target});
+    if (res.status != .ok) std.log.err("getHtml failed: {s}\n", .{body});
+
+    return body;
 }
