@@ -9,12 +9,13 @@ pub fn main() !void {
     defer std.debug.assert(gpa.deinit() == .ok);
     const allocator = gpa.allocator();
 
-    const html = try getHtml("https://example.com", allocator);
-    std.debug.print("getHtml: {s}\n", .{html});
+    // const html = try getHtml("https://example.com", allocator);
+    const html = try getHtml("https://maillotofc.com/products/reproduction-of-found-german-military-trainer-_-black?variant=44108846530725", allocator);
+    // std.debug.print("getHtml: {s}\n", .{html});
     defer allocator.free(html);
 
 
-    const div = try getElementContents(html, "a", allocator);
+    const div = try getElementContents(html, "dd", allocator);
     std.debug.print("getElementContents: {s}\n", .{div});
 }
 
