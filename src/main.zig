@@ -67,31 +67,31 @@ pub fn getElements(html: []const u8, tag: []const u8, allocator: std.mem.Allocat
     var element_list = std.ArrayList([]const u8).init(allocator);
     defer element_list.deinit();
 
+    const tag_open: []const u8 = try std.mem.concat(allocator, u8, &[_][]const u8{ "<", tag, ">" });
+    defer allocator.free(tag_open);
+
+    const tag_close: []const u8 = try std.mem.concat(allocator, u8, &[_][]const u8{ "</", tag, ">" });
+    defer allocator.free(tag_close);
+
     var search_offset: usize = 0;
 
     while (true) {
-        const tag_open: []const u8 = try std.mem.concat(allocator, u8, &[_][]const u8{"<", tag, ">"});
-        defer allocator.free(tag_open);
-
-        const tag_close: []const u8 = try std.mem.concat(allocator, u8, &[_][]const u8{"</", tag, ">"});
-        defer allocator.free(tag_close);
-
         const start_index_opt = std.mem.indexOf(u8, html[search_offset..], tag_open);
         if (start_index_opt == null) break;
-        
+
         const start_index = start_index_opt.? + search_offset;
 
-        const tag_end_index_opt = std.mem.indexOf(u8, html[start_index..], ">");
-        if (tag_end_index_opt == null) return Errors.TagNotFound;
+        const start_end_index_opt = std.mem.indexOf(u8, html[start_index..], ">");
+        if (start_end_index_opt == null) return Errors.TagNotFound;
 
-        const tag_end_index = start_index + tag_end_index_opt.? + 1;
+        const start_end_index = start_index + start_end_index_opt.? + 1;
 
-        const end_index_opt = std.mem.indexOf(u8, html[tag_end_index..], tag_close);
+        const end_index_opt = std.mem.indexOf(u8, html[start_end_index..], tag_close);
         if (end_index_opt == null) return Errors.TagNotFound;
 
-        const end_index = tag_end_index + end_index_opt.?;
-        
-        const element_content = html[tag_end_index..end_index];
+        const end_index = start_end_index + end_index_opt.?;
+
+        const element_content = html[start_end_index..end_index];
         try element_list.append(element_content);
 
         search_offset = end_index + tag_close.len;
