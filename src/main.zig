@@ -13,8 +13,8 @@ pub fn main() !void {
     defer allocator.free(html);
     std.debug.print("getHtml: {s}\n", .{html});
 
-    const el = try getElement(html);
-    std.debug.print("getElement: {s}\n", .{el});
+    // const el = try getElement(html);
+    // std.debug.print("getElement: {s}\n", .{el});
 
     // const divs = try getElements(html, "p", allocator);
     // defer allocator.free(divs);
@@ -22,6 +22,12 @@ pub fn main() !void {
     // for (divs) |div| {
     //     std.debug.print("getElements: {s}\n", .{div});
     // }
+    const elements = try getAllElements(html, allocator);
+    defer allocator.free(elements);
+
+    for (elements) |element| {
+        std.debug.print("getAllElements: {s}\n", .{element});
+    }
 }
 
 pub fn getHtml(url: []const u8, allocator: std.mem.Allocator) ![]const u8 {
@@ -42,39 +48,91 @@ pub fn getHtml(url: []const u8, allocator: std.mem.Allocator) ![]const u8 {
     return body;
 }
 
-pub fn getElement(html: []const u8) ![]const u8 {
+pub fn getElement(html: []const u8) ?[]const u8 {
     var search_offset: usize = 0;
 
     while (true) {
         const open_start_opt = std.mem.indexOf(u8, html[search_offset..], "<");
-        if (open_start_opt == null) return Errors.TagNotFound;
+        if (open_start_opt == null) return null;
 
-        const open_start = open_start_opt.? + search_offset;
-
-        if (html[open_start + 1] == '!') {
-            const close_comment_opt = std.mem.indexOf(u8, html[open_start..], ">");
-            if (close_comment_opt == null) return Errors.TagNotFound;
-
-            search_offset = open_start + close_comment_opt.? + 1;
+        const open_start = open_start_opt.? + search_offset + 1;
+        if (html[open_start] == '/') {
+            search_offset = open_start;
             continue;
         }
 
-        const close_start_opt = std.mem.indexOf(u8, html[open_start..], "</");
-        if (close_start_opt == null) return Errors.TagNotFound;
-
         const open_end_opt = std.mem.indexOf(u8, html[open_start..], ">");
-        if (open_end_opt == null) return Errors.TagNotFound;
+        if (open_end_opt == null) return null;
 
-        const open_index = open_start + open_end_opt.? + 1;
-        const close_start = close_start_opt.? + open_start;
+        const open_end = open_start + open_end_opt.?;
 
-        // const close_end_opt = std.mem.indexOf(u8, html[close_start..], ">");
-        // if (close_end_opt == null) return Errors.TagNotFound;
+        var open_tag = html[open_start..open_end];
+        for (open_tag) |char| {
+            if (char != ' ') continue;
 
-        // const close_index = close_start + close_end_opt.?;
-        
-        return html[open_index..close_start];
+            const char_index = std.mem.indexOfScalar(u8, open_tag, char);
+
+            if (char_index != null) {
+                open_tag = open_tag[0..char_index.?];
+            }
+        }
+        std.debug.print("[getElement] open_tag: {s}\n", .{open_tag});
+
+        // closing
+        var close_start_opt: ?usize = null;
+        var possible_offset = open_end;
+
+        while (true) {
+            close_start_opt = std.mem.indexOf(u8, html[possible_offset..], "</");
+            if (close_start_opt == null) {
+                break;
+            }
+
+            const close_start_index = close_start_opt.? + possible_offset;
+
+            if (std.mem.startsWith(u8, html[close_start_index + 2 ..], open_tag)) {
+                close_start_opt = close_start_index;
+                break;
+            }
+
+            possible_offset = close_start_index + 2;
+        }
+
+        if (close_start_opt == null) {
+            search_offset = open_end + 1;
+            continue;
+        }
+
+        const start_index = open_end + 1;
+        const end_index = close_start_opt.?; // "</"
+
+        return html[start_index..end_index];
     }
+
+    return null;
+}
+
+pub fn getAllElements(html: []const u8, allocator: std.mem.Allocator) ![]const []const u8 {
+    var element_list = std.ArrayList([]const u8).init(allocator);
+    defer element_list.deinit();
+
+    var search_offset: usize = 0;
+
+    while (true) {
+        const element = getElement(html[search_offset..]);
+        if (element != null) {
+            try element_list.append(element.?);
+        } else {
+            break;
+        }
+
+        // std.debug.print("[getAllElements] element: {s}\n", .{element.?});
+
+        const element_index = std.mem.lastIndexOf(u8, html, element.?);
+        search_offset = element_index.?;
+    }
+    
+    return element_list.toOwnedSlice();
 }
 
 // pub fn getElement(html: []const u8, tag: []const u8, allocator: std.mem.Allocator) ![]const u8 {
