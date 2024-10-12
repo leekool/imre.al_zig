@@ -10,18 +10,18 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     const html = try getHtml("https://example.com", allocator);
-    std.debug.print("getHtml: {s}\n", .{html});
     defer allocator.free(html);
+    std.debug.print("getHtml: {s}\n", .{html});
 
-    // const div = try getElement(html, "div", allocator);
-    // std.debug.print("getElement: {s}\n", .{div});
+    const el = try getElement(html);
+    std.debug.print("getElement: {s}\n", .{el});
 
-    const divs = try getElements(html, "p", allocator);
-    defer allocator.free(divs);
+    // const divs = try getElements(html, "p", allocator);
+    // defer allocator.free(divs);
 
-    for (divs) |div| {
-        std.debug.print("getElements: {s}\n", .{div});
-    }
+    // for (divs) |div| {
+    //     std.debug.print("getElements: {s}\n", .{div});
+    // }
 }
 
 pub fn getHtml(url: []const u8, allocator: std.mem.Allocator) ![]const u8 {
@@ -42,26 +42,61 @@ pub fn getHtml(url: []const u8, allocator: std.mem.Allocator) ![]const u8 {
     return body;
 }
 
-pub fn getElement(html: []const u8, tag: []const u8, allocator: std.mem.Allocator) ![]const u8 {
-    const tag_open: []const u8 = try std.mem.concat(allocator, u8, &[_][]const u8{ "<", tag });
-    defer allocator.free(tag_open);
+pub fn getElement(html: []const u8) ![]const u8 {
+    var search_offset: usize = 0;
 
-    const tag_close: []const u8 = try std.mem.concat(allocator, u8, &[_][]const u8{ "</", tag, ">" });
-    defer allocator.free(tag_close);
+    while (true) {
+        const open_start_opt = std.mem.indexOf(u8, html[search_offset..], "<");
+        if (open_start_opt == null) return Errors.TagNotFound;
 
-    const start_index_opt = std.mem.indexOf(u8, html, tag_open);
-    const end_index_opt = std.mem.indexOf(u8, html, tag_close);
+        const open_start = open_start_opt.? + search_offset;
 
-    if (start_index_opt == null or end_index_opt == null) {
-        return Errors.TagNotFound;
+        if (html[open_start + 1] == '!') {
+            const close_comment_opt = std.mem.indexOf(u8, html[open_start..], ">");
+            if (close_comment_opt == null) return Errors.TagNotFound;
+
+            search_offset = open_start + close_comment_opt.? + 1;
+            continue;
+        }
+
+        const close_start_opt = std.mem.indexOf(u8, html[open_start..], "</");
+        if (close_start_opt == null) return Errors.TagNotFound;
+
+        const open_end_opt = std.mem.indexOf(u8, html[open_start..], ">");
+        if (open_end_opt == null) return Errors.TagNotFound;
+
+        const open_index = open_start + open_end_opt.? + 1;
+        const close_start = close_start_opt.? + open_start;
+
+        // const close_end_opt = std.mem.indexOf(u8, html[close_start..], ">");
+        // if (close_end_opt == null) return Errors.TagNotFound;
+
+        // const close_index = close_start + close_end_opt.?;
+        
+        return html[open_index..close_start];
     }
-
-    const start_index = start_index_opt.? + std.mem.indexOf(u8, html[start_index_opt.?..], ">").? + 1;
-    const end_index = end_index_opt.?;
-
-    const substring = html[start_index..end_index];
-    return substring;
 }
+
+// pub fn getElement(html: []const u8, tag: []const u8, allocator: std.mem.Allocator) ![]const u8 {
+//     const tag_open: []const u8 = try std.mem.concat(allocator, u8, &[_][]const u8{ "<", tag });
+//     defer allocator.free(tag_open);
+//
+//     const tag_close: []const u8 = try std.mem.concat(allocator, u8, &[_][]const u8{ "</", tag, ">" });
+//     defer allocator.free(tag_close);
+//
+//     const start_index_opt = std.mem.indexOf(u8, html, tag_open);
+//     const end_index_opt = std.mem.indexOf(u8, html, tag_close);
+//
+//     if (start_index_opt == null or end_index_opt == null) {
+//         return Errors.TagNotFound;
+//     }
+//
+//     const start_index = start_index_opt.? + std.mem.indexOf(u8, html[start_index_opt.?..], ">").? + 1;
+//     const end_index = end_index_opt.?;
+//
+//     const substring = html[start_index..end_index];
+//     return substring;
+// }
 
 pub fn getElements(html: []const u8, tag: []const u8, allocator: std.mem.Allocator) ![]const []const u8 {
     var element_list = std.ArrayList([]const u8).init(allocator);
