@@ -9,7 +9,8 @@ pub fn main() !void {
     defer std.debug.assert(gpa.deinit() == .ok);
     const allocator = gpa.allocator();
 
-    const html = try getHtml("https://example.com", allocator);
+    // const html = try getHtml("https://example.com", allocator);
+    const html = try getHtml("https://zig.guide", allocator);
     defer allocator.free(html);
     std.debug.print("getHtml: {s}\n", .{html});
 
@@ -48,27 +49,52 @@ pub fn processHtml(html: []const u8, allocator: std.mem.Allocator) ![]const []co
 
         const tag = getFirstTag(html[i..]) orelse continue;
 
-        const relative_tag_end_index = std.mem.indexOf(u8, html[i..], ">") orelse continue;
-        const start_index = i + relative_tag_end_index + 1; // Move to the start of the content after '>
+        const open_tag_end_index = std.mem.indexOf(u8, html[i..], ">") orelse continue;
+        const inner_start_index = i + open_tag_end_index + 1;
 
         std.debug.print("tag: {s}\n", .{tag});
 
-        const close_tag = try std.mem.concat(allocator, u8, &[_][]const u8{ "</", tag, ">" });
-        defer allocator.free(close_tag);
+        const close_tag_index = try getCloseTagIndex(html[inner_start_index..], tag, allocator) orelse continue;
+        const inner_end_index = close_tag_index + inner_start_index;
 
-        const close_tag_start_index = std.mem.indexOf(u8, html[start_index..], close_tag) orelse continue;
+        const content = html[inner_start_index..inner_end_index];
+        if (content.len > 0) try elements.append(content);
 
-        const close_index = close_tag_start_index + start_index;
-
-        const content = html[start_index..close_index];
-        try elements.append(content);
-
-        std.debug.print("contents: {s}\n", .{content});
+        std.debug.print("content: {s}\n", .{content});
     }
 
     return elements.toOwnedSlice();
 }
 
+pub fn getCloseTagIndex(html: []const u8, tag: []const u8, allocator: std.mem.Allocator) !?usize {
+    const open_tag = try std.mem.concat(allocator, u8, &[_][]const u8{ "<", tag });
+    defer allocator.free(open_tag);
+
+    const close_tag = try std.mem.concat(allocator, u8, &[_][]const u8{ "</", tag, ">" });
+    defer allocator.free(close_tag);
+
+    var open_tag_count: usize = 1;
+    var search_index: usize = 0;
+
+    while (true) {
+        const next_open_tag_index = std.mem.indexOf(u8, html[search_index..], open_tag);
+        const next_close_tag_index = std.mem.indexOf(u8, html[search_index..], close_tag) orelse break;
+
+        if (next_open_tag_index != null and next_open_tag_index.? < next_close_tag_index) {
+            open_tag_count += 1;
+            search_index += next_open_tag_index.? + tag.len + 1;
+        } else {
+            open_tag_count -= 1;
+            search_index += next_close_tag_index + close_tag.len;
+
+            if (open_tag_count == 0) {
+                return search_index - close_tag.len;
+            }
+        }
+    }
+
+    return null;
+}
 
 pub fn getFirstTag(html: []const u8) ?[]const u8 {
     if (html.len < 2 or html[1] == '!' or html[1] == '/') return null;
