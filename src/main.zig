@@ -10,7 +10,8 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     // const html = try getHtml("https://example.com", allocator);
-    const html = try getHtml("https://zig.guide", allocator);
+    // const html = try getHtml("https://zig.guide", allocator);
+    const html = try getHtml("https://yuta-abe.com", allocator);
     defer allocator.free(html);
     std.debug.print("getHtml: {s}\n", .{html});
 
@@ -140,7 +141,7 @@ pub fn getFirstTag(html: []const u8) ?[]const u8 {
 //         return open_tag;
 //     }
 // }
-//
+
 // pub fn getClosingTagIndex(html: []const u8, tag_name: []const u8) ?usize {
 //     var search_offset: usize = 0;
 //
@@ -157,7 +158,7 @@ pub fn getFirstTag(html: []const u8) ?[]const u8 {
 //         search_offset = close_start_index + 1;
 //     }
 // }
-//
+
 // pub fn getElement(html: []const u8) ?[]const u8 {
 //     var search_offset: usize = 0;
 //
@@ -183,7 +184,7 @@ pub fn getFirstTag(html: []const u8) ?[]const u8 {
 //
 //     return null;
 // }
-//
+
 // pub fn getAllElements(html: []const u8, allocator: std.mem.Allocator) ![]const []const u8 {
 //     var element_list = std.ArrayList([]const u8).init(allocator);
 //     defer element_list.deinit();
