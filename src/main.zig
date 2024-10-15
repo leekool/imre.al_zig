@@ -15,7 +15,7 @@ pub fn main() !void {
     defer allocator.free(html);
     std.debug.print("getHtml: {s}\n", .{html});
 
-    const elements = try processHtml(html, allocator);
+    const elements = try getElements(html, allocator);
     defer allocator.free(elements);
 
     for (elements) |element| {
@@ -42,7 +42,7 @@ pub fn getHtml(url: []const u8, allocator: std.mem.Allocator) ![]const u8 {
     return body;
 }
 
-pub fn processHtml(html: []const u8, allocator: std.mem.Allocator) ![]const Element {
+pub fn getElements(html: []const u8, allocator: std.mem.Allocator) ![]const Element {
     var elements = std.ArrayList(Element).init(allocator);
     defer elements.deinit();
 
