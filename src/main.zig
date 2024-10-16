@@ -17,8 +17,12 @@ pub fn main() !void {
 
     const elements = try getElements(html, allocator);
     defer allocator.free(elements);
+    
+    const nested_elements = try getNestedElements(elements, allocator);
+    defer allocator.free(nested_elements);
 
-    for (elements) |element| {
+    for (nested_elements) |element| {
+        // if (std.mem.indexOf(u8, element.inner, "$") == null) continue; 
         std.debug.print("[element]\ntag: {s}\ninner: {s}\n", .{ element.tag, element.inner });
     }
 }
@@ -40,6 +44,23 @@ pub fn getHtml(url: []const u8, allocator: std.mem.Allocator) ![]const u8 {
     if (res.status != .ok) std.log.err("getHtml failed: {s}\n", .{body});
 
     return body;
+}
+
+// very basic
+pub fn getNestedElements(elements: []const Element, allocator: std.mem.Allocator) ![]const Element {
+    var nested_elements = std.ArrayList(Element).init(allocator);
+    defer nested_elements.deinit();
+
+    for (elements) |element| {
+        const end_index_a = std.mem.indexOf(u8, element.inner, "/>");
+        const end_index_b = std.mem.indexOf(u8, element.inner, "</");
+
+        if (end_index_a == null and end_index_b == null) {
+            try nested_elements.append(element);
+        }
+    }
+    
+    return nested_elements.toOwnedSlice();
 }
 
 pub fn getElements(html: []const u8, allocator: std.mem.Allocator) ![]const Element {
