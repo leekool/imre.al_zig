@@ -12,26 +12,28 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     // const html = try getHtml("https://example.com", allocator);
-    const html = try getHtml("https://burypink.neocities.org/anime.html", allocator);
     // const html = try getHtml("https://maillotofc.com/products/reproduction-of-found-german-military-trainer-_-black?variant=44108846530725", allocator);
+    const html = try getHtml("https://burypink.neocities.org/anime.html", allocator);
     defer allocator.free(html);
-    std.debug.print("getHtml: {s}\n", .{html});
+    // std.debug.print("getHtml: {s}\n", .{html});
 
     var t = try std.time.Timer.start();
-    const elements = try getElements(html, allocator);
-    defer allocator.free(elements);
-    for (elements) |element| {
-        if (std.mem.indexOf(u8, element.tag, "div") == null) continue;
+
+    var elements = std.ArrayList(Element).init(allocator);
+    defer elements.deinit();
+
+    try getElements(html, &elements);
+    try removeElementsWithChildren(&elements);
+
+    for (elements.items) |element| {
         // if (std.mem.indexOf(u8, element.tag, "script") != null) continue;
         // if (std.mem.indexOf(u8, element.inner, "$") == null) continue;
         std.debug.print("[element]\ntag: {s}\ninner: {s}\n", .{ element.tag, element.inner });
     }
+
+
     std.debug.print("{}\n", .{std.fmt.fmtDuration(t.read())});
-
-    // const nested_elements = try getNestedElements(elements, allocator);
-    // defer allocator.free(nested_elements);
-
-    std.debug.print("elements.len: {}\n", .{elements.len});
+    // std.debug.print("elements.len: {}\n", .{ elements.len });
 }
 
 pub fn getHtml(url: []const u8, allocator: std.mem.Allocator) ![]const u8 {
@@ -50,27 +52,26 @@ pub fn getHtml(url: []const u8, allocator: std.mem.Allocator) ![]const u8 {
     return body;
 }
 
-// very basic
-pub fn getNestedElements(elements: []const Element, allocator: std.mem.Allocator) ![]const Element {
-    var nested_elements = std.ArrayList(Element).init(allocator);
-    defer nested_elements.deinit();
+// very basic check for elements with children
+pub fn removeElementsWithChildren(elements: *std.ArrayList(Element)) !void {
+    var index: usize = 0;
 
-    for (elements) |element| {
+    while (index < elements.items.len) {
+        const element = elements.items[index];
         const end_index_a = std.mem.indexOf(u8, element.inner, "/>");
         const end_index_b = std.mem.indexOf(u8, element.inner, "</");
 
-        if (end_index_a == null and end_index_b == null) {
-            try nested_elements.append(element);
-        }
-    }
+        if (end_index_a != null or end_index_b != null) {
+            _ = elements.swapRemove(index);
+            continue;
 
-    return nested_elements.toOwnedSlice();
+        }
+
+        index += 1;
+    }
 }
 
-pub fn getElements(html: []const u8, allocator: std.mem.Allocator) ![]const Element {
-    var elements = std.ArrayList(Element).init(allocator);
-    defer elements.deinit();
-
+pub fn getElements(html: []const u8, elements: *std.ArrayList(Element)) !void {
     for (0.., html) |i, char| {
         if (char != '<') continue;
 
@@ -79,7 +80,6 @@ pub fn getElements(html: []const u8, allocator: std.mem.Allocator) ![]const Elem
         const open_tag_end_index = std.mem.indexOf(u8, html[i..], ">") orelse continue;
         const inner_start_index = i + open_tag_end_index + 1;
 
-        // const close_tag_index = try getCloseTagIndex(html[inner_start_index..], tag, allocator) orelse continue;
         const close_tag_index = try getCloseTagIndex(html[inner_start_index..], tag) orelse continue;
         const inner_end_index = close_tag_index + inner_start_index;
 
@@ -93,8 +93,6 @@ pub fn getElements(html: []const u8, allocator: std.mem.Allocator) ![]const Elem
 
         try elements.append(element);
     }
-
-    return elements.toOwnedSlice();
 }
 
 pub fn getFirstTag(html: []const u8) ?[]const u8 {
