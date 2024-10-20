@@ -2,7 +2,10 @@ const std = @import("std");
 const http = std.http;
 const heap = std.heap;
 
-pub const Errors = error{TagNotFound};
+pub const Errors = error{
+    TagNotFound,
+    NoUrl
+};
 
 const Element = struct { tag: []const u8, inner: []const u8 };
 
@@ -11,9 +14,11 @@ pub fn main() !void {
     defer std.debug.assert(gpa.deinit() == .ok);
     const allocator = gpa.allocator();
 
-    // const html = try getHtml("https://example.com", allocator);
-    // const html = try getHtml("https://maillotofc.com/products/reproduction-of-found-german-military-trainer-_-black?variant=44108846530725", allocator);
-    const html = try getHtml("https://burypink.neocities.org/anime.html", allocator);
+    var args = std.process.args();
+    _ = args.skip();
+
+    const url = args.next() orelse return Errors.NoUrl;
+    const html = try getHtml(url, allocator);
     defer allocator.free(html);
     // std.debug.print("getHtml: {s}\n", .{html});
 
@@ -23,17 +28,14 @@ pub fn main() !void {
     defer elements.deinit();
 
     try getElements(html, &elements);
-    try removeElementsWithChildren(&elements);
+    try getElementsWithAmounts(&elements);
 
     for (elements.items) |element| {
-        // if (std.mem.indexOf(u8, element.tag, "script") != null) continue;
-        // if (std.mem.indexOf(u8, element.inner, "$") == null) continue;
         std.debug.print("[element]\ntag: {s}\ninner: {s}\n", .{ element.tag, element.inner });
     }
 
-
     std.debug.print("{}\n", .{std.fmt.fmtDuration(t.read())});
-    // std.debug.print("elements.len: {}\n", .{ elements.len });
+    std.debug.print("elements.items.len: {}\n", .{elements.items.len});
 }
 
 pub fn getHtml(url: []const u8, allocator: std.mem.Allocator) ![]const u8 {
@@ -52,23 +54,58 @@ pub fn getHtml(url: []const u8, allocator: std.mem.Allocator) ![]const u8 {
     return body;
 }
 
+pub fn getElementsWithAmounts(elements: *std.ArrayList(Element)) !void {
+    try removeElementsWithChildren(elements);
+        
+    var count: usize = 0;
+
+    for (elements.items) |element| {
+        if (std.mem.indexOf(u8, element.tag, "script") != null) continue;
+        if (std.mem.indexOf(u8, element.inner, "$") == null) continue;
+        if (!hasNumber(element.inner)) continue;
+
+        elements.items[count] = element;
+        count += 1;
+    }
+
+    try elements.resize(count);
+}
+
+pub fn hasNumber(slice: []const u8) bool {
+    for (slice) |byte| {
+       if (byte >= '0' and byte <= '9') return true; 
+    }
+
+    return false;
+}
+
 // very basic check for elements with children
 pub fn removeElementsWithChildren(elements: *std.ArrayList(Element)) !void {
-    var index: usize = 0;
+    var count: usize = 0;
 
-    while (index < elements.items.len) {
-        const element = elements.items[index];
-        const end_index_a = std.mem.indexOf(u8, element.inner, "/>");
-        const end_index_b = std.mem.indexOf(u8, element.inner, "</");
+    for (elements.items) |element| {
+        if (std.mem.indexOf(u8, element.inner, "</") != null) continue;
+        if (std.mem.indexOf(u8, element.inner, "/>") != null) continue;
 
-        if (end_index_a != null or end_index_b != null) {
-            _ = elements.swapRemove(index);
-            continue;
-
-        }
-
-        index += 1;
+        elements.items[count] = element;
+        count += 1;
     }
+
+    try elements.resize(count);
+    // var index: usize = 0;
+    //
+    // while (index < elements.items.len) {
+    //     const element = elements.items[index];
+    //     const end_index_a = std.mem.indexOf(u8, element.inner, "/>");
+    //     const end_index_b = std.mem.indexOf(u8, element.inner, "</");
+    //
+    //     if (end_index_a != null or end_index_b != null) {
+    //         _ = elements.swapRemove(index);
+    //         continue;
+    //     }
+    //
+    //     index += 1;
+    // }
 }
 
 pub fn getElements(html: []const u8, elements: *std.ArrayList(Element)) !void {
@@ -84,7 +121,7 @@ pub fn getElements(html: []const u8, elements: *std.ArrayList(Element)) !void {
         const inner_end_index = close_tag_index + inner_start_index;
 
         const inner = html[inner_start_index..inner_end_index];
-        // if (inner.len == 0) continue;
+        if (inner.len == 0) continue;
 
         const element = Element{
             .tag = tag,
@@ -97,8 +134,7 @@ pub fn getElements(html: []const u8, elements: *std.ArrayList(Element)) !void {
 
 pub fn getFirstTag(html: []const u8) ?[]const u8 {
     const start_tag_end_index = std.mem.indexOf(u8, html, ">") orelse return null;
-    var tag = html[1 .. start_tag_end_index];
-
+    var tag = html[1..start_tag_end_index];
 
     if (tag.len == 0 or tag[0] == '/' or tag[tag.len - 1] == '/' or tag[0] == '!') {
         return null;
