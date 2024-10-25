@@ -89,20 +89,6 @@ pub fn removeElementsWithChildren(elements: *std.ArrayList(Element)) !void {
     }
 
     try elements.resize(count);
-    // var index: usize = 0;
-    //
-    // while (index < elements.items.len) {
-    //     const element = elements.items[index];
-    //     const end_index_a = std.mem.indexOf(u8, element.inner, "/>");
-    //     const end_index_b = std.mem.indexOf(u8, element.inner, "</");
-    //
-    //     if (end_index_a != null or end_index_b != null) {
-    //         _ = elements.swapRemove(index);
-    //         continue;
-    //     }
-    //
-    //     index += 1;
-    // }
 }
 
 pub fn getElements(html: []const u8, elements: *std.ArrayList(Element)) !void {
@@ -111,7 +97,9 @@ pub fn getElements(html: []const u8, elements: *std.ArrayList(Element)) !void {
     for (0.., html) |i, char| {
         if (char != '<') continue;
 
-        const tag = getFirstTag(html[i..]) orelse continue;
+        // const tag = getFirstTag(html[i..]) orelse continue;
+        const full_tag = getFirstOpeningTag(html[i..]) orelse continue;
+        const tag = getElementNameFromTag(full_tag);
 
         const open_tag_end_index = std.mem.indexOf(u8, html[i..], ">") orelse continue;
         const inner_start_index = i + open_tag_end_index + 1;
@@ -124,12 +112,15 @@ pub fn getElements(html: []const u8, elements: *std.ArrayList(Element)) !void {
 
         element_count += 1;
 
+        const attributes = getElementAttributes(full_tag);
+        _ = attributes;
         const element = Element{ .tag = tag, .inner_html = inner, .index = element_count };
 
         try elements.append(element);
     }
 }
 
+// todo: values should be trimmed
 pub fn getElementAttributes(start_tag: []const u8) void {
     if (std.mem.startsWith(u8, start_tag, "script")) return; // todo: handle script tags
 
@@ -137,61 +128,78 @@ pub fn getElementAttributes(start_tag: []const u8) void {
 
     var attributes: [50]Attribute = undefined;
     var attribute_count: usize = 0;
+    var base_index: usize = 0;
 
-    while (true) {
-        const equal_index = std.mem.indexOf(u8, start_tag, "=") orelse return;
-        const key_index = std.mem.indexOf(u8, start_tag[0 .. equal_index - 1], " ") orelse return;
-        const value_surround_char = [1]u8{start_tag[equal_index + 1]}; // ' or "
-        const value_index = std.mem.indexOf(u8, start_tag[equal_index + 2 ..], &value_surround_char) orelse return;
+    while (base_index < start_tag.len) {
+        const start = start_tag[base_index..];
 
-        const key = start_tag[key_index + 1 .. equal_index];
-        const value = start_tag[equal_index + 2 .. value_index + equal_index + 2];
+        const equal_index = std.mem.indexOf(u8, start, "=") orelse break;
+        const key_start = std.mem.lastIndexOf(u8, start[0..equal_index], " ") orelse break;
+        const key = start[key_start..equal_index];
 
-        attributes[attribute_count] = Attribute{ .key = key, .value = value }; 
+        const value_surround_char = start[equal_index + 1];
+        if (value_surround_char != '"' and value_surround_char != '\'') break;
+
+        const value_start = equal_index + 2;
+        const value_end_index = std.mem.indexOf(u8, start[value_start..], &[1]u8{value_surround_char}) orelse break;
+
+        var value = start[value_start .. value_start + value_end_index];
+        value = std.mem.trim(u8, value, &[2]u8{' ', '\n'});
+
+        attributes[attribute_count] = Attribute{ .key = key, .value = value };
         attribute_count += 1;
-        break;
+
+        base_index += value_start + value_end_index + 1;
     }
-    
+
     for (attributes[0..attribute_count]) |a| {
         std.debug.print("{s}: {s}\n", .{ a.key, a.value });
     }
-
-    //    var attributes = std.mem.splitSequence(u8, start_tag, " ");
-    //    while (attributes.next()) |a| {
-    //        const delimiter = std.mem.indexOf(u8, a, "=") orelse continue;
-    //        const key = a[0..delimiter];
-    //        var value = a[delimiter + 1..];
-    //
-    //        if (key.len == 0 or value.len == 0) continue;
-    //
-    //        std.debug.print("attribute: {s}\nkey: {s}\nvalue: {s}\n", .{ a, key, value });
-    //
-    //        if (value[0] == '\'' or value[0] == '"') {
-    //            value = value[1..value.len - 1];
-    //        }
-    //    }
 }
 
-pub fn getFirstTag(html: []const u8) ?[]const u8 {
+// returns what's between "<" and ">" including attributes
+pub fn getFirstOpeningTag(html: []const u8) ?[]const u8 {
     const start_tag_end_index = std.mem.indexOf(u8, html, ">") orelse return null;
-    var tag = html[1..start_tag_end_index];
+    const tag = html[1..start_tag_end_index];
 
     if (tag.len == 0 or tag[0] == '/' or tag[tag.len - 1] == '/' or tag[0] == '!' or tag[0] == '=') {
         return null;
     }
 
-    const space_index_opt = std.mem.indexOf(u8, tag, " ");
-    if (space_index_opt != null) {
-        // try getElementAttributes(tag);
-        getElementAttributes(tag);
-        tag = tag[0..space_index_opt.?];
-    }
-
-    const break_index_opt = std.mem.indexOf(u8, tag, "\n");
-    if (break_index_opt != null) tag = tag[0..break_index_opt.?];
-
     return tag;
 }
+
+pub fn getElementNameFromTag(tag: []const u8) []const u8 {
+    var name = tag;
+
+    const space_index_opt = std.mem.indexOf(u8, tag, " ");
+    if (space_index_opt != null) name = tag[0..space_index_opt.?];
+
+    const break_index_opt = std.mem.indexOf(u8, tag, "\n");
+    if (break_index_opt != null) name = tag[0..break_index_opt.?];
+
+    return name;
+}
+
+// pub fn getFirstTag(html: []const u8) ?[]const u8 {
+//     const start_tag_end_index = std.mem.indexOf(u8, html, ">") orelse return null;
+//     var tag = html[1..start_tag_end_index];
+//
+//     if (tag.len == 0 or tag[0] == '/' or tag[tag.len - 1] == '/' or tag[0] == '!' or tag[0] == '=') {
+//         return null;
+//     }
+//
+//     const space_index_opt = std.mem.indexOf(u8, tag, " ");
+//     if (space_index_opt != null) {
+//         // getElementAttributes(tag);
+//         tag = tag[0..space_index_opt.?];
+//     }
+//
+//     const break_index_opt = std.mem.indexOf(u8, tag, "\n");
+//     if (break_index_opt != null) tag = tag[0..break_index_opt.?];
+//
+//     return tag;
+// }
 
 pub fn getCloseTagIndex(html: []const u8, tag: []const u8) !?usize {
     var open_tag_count: usize = 1;
