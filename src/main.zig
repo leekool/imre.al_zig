@@ -5,6 +5,7 @@ const heap = std.heap;
 pub const Errors = error{ TagNotFound, NoUrl };
 
 const Element = struct { tag: []const u8, inner_html: []const u8, index: u16 };
+const Attribute = struct { key: []const u8, value: []const u8 };
 
 pub fn main() !void {
     var gpa = heap.GeneralPurposeAllocator(.{}){};
@@ -25,14 +26,13 @@ pub fn main() !void {
     defer elements.deinit();
 
     try getElements(html, &elements);
-    try getElementsWithAmounts(&elements);
+    // try getElementsWithAmounts(&elements);
 
-    for (elements.items) |element| {
-        std.debug.print("[element]\ntag: {s}\nindex: {}\ninner: {s}\n", .{ element.tag, element.index, element.inner_html });
-    }
+    // for (elements.items) |element| {
+    //     std.debug.print("[element]\ntag: {s}\nindex: {}\ninner_html: {s}\n", .{ element.tag, element.index, element.inner_html });
+    // }
 
-    std.debug.print("{}\n", .{std.fmt.fmtDuration(t.read())});
-    std.debug.print("elements.items.len: {}\n", .{elements.items.len});
+    std.debug.print("elements.items.len: {}\nexecution time: {}\n", .{ elements.items.len, std.fmt.fmtDuration(t.read()) });
 }
 
 pub fn getHtml(url: []const u8, allocator: std.mem.Allocator) ![]const u8 {
@@ -130,16 +130,62 @@ pub fn getElements(html: []const u8, elements: *std.ArrayList(Element)) !void {
     }
 }
 
+pub fn getElementAttributes(start_tag: []const u8) void {
+    if (std.mem.startsWith(u8, start_tag, "script")) return; // todo: handle script tags
+
+    std.debug.print("start_tag: {s}\n", .{start_tag});
+
+    var attributes: [50]Attribute = undefined;
+    var attribute_count: usize = 0;
+
+    while (true) {
+        const equal_index = std.mem.indexOf(u8, start_tag, "=") orelse return;
+        const key_index = std.mem.indexOf(u8, start_tag[0 .. equal_index - 1], " ") orelse return;
+        const value_surround_char = [1]u8{start_tag[equal_index + 1]}; // ' or "
+        const value_index = std.mem.indexOf(u8, start_tag[equal_index + 2 ..], &value_surround_char) orelse return;
+
+        const key = start_tag[key_index + 1 .. equal_index];
+        const value = start_tag[equal_index + 2 .. value_index + equal_index + 2];
+
+        attributes[attribute_count] = Attribute{ .key = key, .value = value }; 
+        attribute_count += 1;
+        break;
+    }
+    
+    for (attributes[0..attribute_count]) |a| {
+        std.debug.print("{s}: {s}\n", .{ a.key, a.value });
+    }
+
+    //    var attributes = std.mem.splitSequence(u8, start_tag, " ");
+    //    while (attributes.next()) |a| {
+    //        const delimiter = std.mem.indexOf(u8, a, "=") orelse continue;
+    //        const key = a[0..delimiter];
+    //        var value = a[delimiter + 1..];
+    //
+    //        if (key.len == 0 or value.len == 0) continue;
+    //
+    //        std.debug.print("attribute: {s}\nkey: {s}\nvalue: {s}\n", .{ a, key, value });
+    //
+    //        if (value[0] == '\'' or value[0] == '"') {
+    //            value = value[1..value.len - 1];
+    //        }
+    //    }
+}
+
 pub fn getFirstTag(html: []const u8) ?[]const u8 {
     const start_tag_end_index = std.mem.indexOf(u8, html, ">") orelse return null;
     var tag = html[1..start_tag_end_index];
 
-    if (tag.len == 0 or tag[0] == '/' or tag[tag.len - 1] == '/' or tag[0] == '!') {
+    if (tag.len == 0 or tag[0] == '/' or tag[tag.len - 1] == '/' or tag[0] == '!' or tag[0] == '=') {
         return null;
     }
 
     const space_index_opt = std.mem.indexOf(u8, tag, " ");
-    if (space_index_opt != null) tag = tag[0..space_index_opt.?];
+    if (space_index_opt != null) {
+        // try getElementAttributes(tag);
+        getElementAttributes(tag);
+        tag = tag[0..space_index_opt.?];
+    }
 
     const break_index_opt = std.mem.indexOf(u8, tag, "\n");
     if (break_index_opt != null) tag = tag[0..break_index_opt.?];
