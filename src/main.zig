@@ -14,15 +14,20 @@ const Element = struct {
         items: [50]Attribute,
         count: usize,
     },
+    price: ?[]const u8 = null,
 
     pub fn print(self: Element) void {
-        std.debug.print("element {}:\n", .{ self.index });
-        std.debug.print("  tag: {s}\n", .{ self.tag });
+        std.debug.print("element {}:\n", .{self.index});
+        std.debug.print("  tag: {s}\n", .{self.tag});
         std.debug.print("  inner_html: {s}\n", .{self.inner_html});
 
         std.debug.print("  attributes:\n", .{});
         for (self.attributes.items[0..self.attributes.count]) |a| {
             std.debug.print("    key: {s}, value: {s}\n", .{ a.key, a.value });
+        }
+
+        if (self.price != null) {
+            std.debug.print("  price: {s}\n", .{self.price.?});
         }
     }
 };
@@ -46,7 +51,7 @@ pub fn main() !void {
     defer elements.deinit();
 
     try getElements(html, &elements);
-    try getElementsWithAmounts(&elements);
+    try toElementsWithPrice(&elements);
 
     for (elements.items) |element| {
         element.print();
@@ -192,21 +197,54 @@ pub fn getCloseTagIndex(html: []const u8, tag: []const u8) !?usize {
     return null;
 }
 
-pub fn getElementsWithAmounts(elements: *std.ArrayList(Element)) !void {
+pub fn toElementsWithPrice(elements: *std.ArrayList(Element)) !void {
     try removeElementsWithChildren(elements);
 
     var count: usize = 0;
 
-    for (elements.items) |element| {
+    for (elements.items) |*element| {
         if (std.mem.indexOf(u8, element.tag, "script") != null) continue;
         if (std.mem.indexOf(u8, element.inner_html, "$") == null) continue;
-        if (!hasNumber(element.inner_html)) continue;
+        if (!getPrice(element)) continue;
 
-        elements.items[count] = element;
+        elements.items[count] = element.*;
         count += 1;
     }
 
     try elements.resize(count);
+}
+
+pub fn getPrice(element: *Element) bool {
+    if (!hasNumber(element.inner_html)) return false;
+
+    var first_digit_index: ?usize = null;
+    var last_digit_index: ?usize = null;
+
+    for (0.., element.inner_html) |i, byte| {
+        if (!std.ascii.isDigit(byte)) continue;
+
+        first_digit_index = i;
+        break;
+    }
+
+    if (first_digit_index == null) return false;
+
+    for (0.., element.inner_html[first_digit_index.?..]) |i, byte| {
+        if (i == element.inner_html[first_digit_index.?..].len - 1) {
+            last_digit_index = first_digit_index.? + i;
+            break;
+        }
+
+        if (std.ascii.isDigit(byte) or byte == '.' or byte == ',') continue;
+
+        last_digit_index = first_digit_index.? + i;
+        break;
+    }
+
+    const price = element.inner_html[first_digit_index.?..last_digit_index.?];
+    element.price = price;
+
+    return true;
 }
 
 pub fn hasNumber(slice: []const u8) bool {
@@ -231,4 +269,3 @@ pub fn removeElementsWithChildren(elements: *std.ArrayList(Element)) !void {
 
     try elements.resize(count);
 }
-
