@@ -10,8 +10,10 @@ const Element = struct {
     tag: []const u8,
     index: u16,
     inner_html: []const u8,
-    attributes: [50]Attribute,
-    attribute_count: usize,
+    attributes: struct {
+        items: [50]Attribute,
+        count: usize,
+    },
 
     pub fn print(self: Element) void {
         std.debug.print("element {}:\n", .{ self.index });
@@ -19,7 +21,7 @@ const Element = struct {
         std.debug.print("  inner_html: {s}\n", .{self.inner_html});
 
         std.debug.print("  attributes:\n", .{});
-        for (self.attributes[0..self.attribute_count]) |a| {
+        for (self.attributes.items[0..self.attributes.count]) |a| {
             std.debug.print("    key: {s}, value: {s}\n", .{ a.key, a.value });
         }
     }
@@ -91,7 +93,7 @@ pub fn getElements(html: []const u8, elements: *std.ArrayList(Element)) !void {
         var attributes: [50]Attribute = undefined;
         const attribute_count = fillElementAttributes(full_tag, &attributes);
 
-        const element = Element{ .tag = tag, .index = element_count, .inner_html = inner, .attributes = attributes, .attribute_count = attribute_count };
+        const element = Element{ .tag = tag, .index = element_count, .inner_html = inner, .attributes = .{ .items = attributes, .count = attribute_count } };
 
         try elements.append(element);
     }
