@@ -231,13 +231,13 @@ pub fn getPrice(element: *Element) bool {
 
     for (0.., element.inner_html[first_digit_index.?..]) |i, byte| {
         if (i == element.inner_html[first_digit_index.?..].len - 1) {
-            last_digit_index = first_digit_index.? + i;
+            last_digit_index = first_digit_index.? + i + 1;
             break;
         }
 
         if (std.ascii.isDigit(byte) or byte == '.' or byte == ',') continue;
 
-        last_digit_index = first_digit_index.? + i;
+        last_digit_index = first_digit_index.? + i + 1;
         break;
     }
 
