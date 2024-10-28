@@ -15,19 +15,18 @@ const Element = struct {
         count: usize,
     },
     price: ?[]const u8 = null,
+    parent_element: ?*Element = null, // todo
 
     pub fn print(self: Element) void {
-        std.debug.print("element {}:\n", .{self.index});
-        std.debug.print("  tag: {s}\n", .{self.tag});
+        std.debug.print("[element {}]\n", .{self.index});
+        std.debug.print("  tag:        {s}\n", .{self.tag});
         std.debug.print("  inner_html: {s}\n", .{self.inner_html});
 
-        std.debug.print("  attributes:\n", .{});
+        if (self.price != null) std.debug.print("  price:      {s}\n", .{self.price.?});
+        if (self.attributes.count > 0) std.debug.print("  attributes: {}\n", .{self.attributes.count});
+
         for (self.attributes.items[0..self.attributes.count]) |a| {
             std.debug.print("    key: {s}, value: {s}\n", .{ a.key, a.value });
-        }
-
-        if (self.price != null) {
-            std.debug.print("  price: {s}\n", .{self.price.?});
         }
     }
 };
@@ -203,8 +202,7 @@ pub fn toElementsWithPrice(elements: *std.ArrayList(Element)) !void {
     var count: usize = 0;
 
     for (elements.items) |*element| {
-        if (std.mem.indexOf(u8, element.tag, "script") != null) continue;
-        if (std.mem.indexOf(u8, element.inner_html, "$") == null) continue;
+        if (std.mem.indexOf(u8, element.tag, "script") != null) continue; // todo: handle script tag
         if (!getPrice(element)) continue;
 
         elements.items[count] = element.*;
@@ -214,13 +212,17 @@ pub fn toElementsWithPrice(elements: *std.ArrayList(Element)) !void {
     try elements.resize(count);
 }
 
+// assumes element's inner html includes "$"
 pub fn getPrice(element: *Element) bool {
-    if (!hasNumber(element.inner_html)) return false;
+    // if (!hasNumber(element.inner_html)) return false;
+
+    const start_index = std.mem.indexOf(u8, element.inner_html, "$") orelse return false;
+    const start_slice = element.inner_html[start_index..];
 
     var first_digit_index: ?usize = null;
     var last_digit_index: ?usize = null;
 
-    for (0.., element.inner_html) |i, byte| {
+    for (0.., start_slice) |i, byte| {
         if (!std.ascii.isDigit(byte)) continue;
 
         first_digit_index = i;
@@ -229,8 +231,8 @@ pub fn getPrice(element: *Element) bool {
 
     if (first_digit_index == null) return false;
 
-    for (0.., element.inner_html[first_digit_index.?..]) |i, byte| {
-        if (i == element.inner_html[first_digit_index.?..].len - 1) {
+    for (0.., start_slice[first_digit_index.?..]) |i, byte| {
+        if (i == start_slice[first_digit_index.?..].len - 1) {
             last_digit_index = first_digit_index.? + i + 1;
             break;
         }
@@ -241,7 +243,7 @@ pub fn getPrice(element: *Element) bool {
         break;
     }
 
-    const price = element.inner_html[first_digit_index.?..last_digit_index.?];
+    const price = start_slice[first_digit_index.?..last_digit_index.?];
     element.price = price;
 
     return true;
