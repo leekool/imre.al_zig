@@ -8,18 +8,16 @@ const Element = @import("html/element.zig");
 
 const PriceWeb = @import("price_web.zig");
 
-const Errors = error{ NoUrl };
+const Errors = error{NoUrl};
 
 fn on_request(r: zap.Request) void {
     if (r.path) |path| {
-        std.debug.print("requested path: {s}\n", .{ path });
+        std.debug.print("requested path: {s}\n", .{path});
     }
 }
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{
-        .thread_safe = true,
-    }){};
+    var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
     defer std.debug.assert(gpa.deinit() == .ok);
     const allocator = gpa.allocator();
 
@@ -29,9 +27,9 @@ pub fn main() !void {
             .port = 3000,
             .on_request = on_request,
             .log = true,
-            .public_folder = "html",
             .max_clients = 5000,
             .max_body_size = 100 * 1024 * 1024,
+            // .public_folder = "html",
         },
     );
     defer listener.deinit();

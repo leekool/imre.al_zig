@@ -1,5 +1,5 @@
 const std = @import("std");
-const Attribute = @import("./attribute.zig");
+const Attribute = @import("attribute.zig");
 
 const Element = @This();
 

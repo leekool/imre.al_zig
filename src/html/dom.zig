@@ -1,8 +1,8 @@
 const std = @import("std");
 const http = std.http;
 const mem = std.mem;
-const Element = @import("./element.zig");
-const Attribute = @import("./attribute.zig");
+const Element = @import("element.zig");
+const Attribute = @import("attribute.zig");
 
 pub fn getHtml(url: []const u8, allocator: mem.Allocator) ![]const u8 {
     var c = http.Client{ .allocator = allocator };

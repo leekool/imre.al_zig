@@ -43,12 +43,25 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // zap
     exe.root_module.addImport("zap", zap.module("zap"));
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
     // step when running `zig build`).
     b.installArtifact(exe);
+
+    const exe_check = b.addExecutable(.{
+        .name = "visualiser",
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    exe_check.root_module.addImport("zap", zap.module("zap"));
+
+    const check = b.step("check", "Check if compiles");
+    check.dependOn(&exe_check.step);
 
     // This *creates* a Run step in the build graph, to be executed when another
     // step is evaluated that depends on it. The next line below will establish
