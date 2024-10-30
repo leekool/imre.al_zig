@@ -10,7 +10,7 @@ const PriceWeb = @import("price_web.zig");
 
 const Errors = error{NoUrl};
 
-fn on_request(r: zap.Request) void {
+fn onRequest(r: zap.Request) void {
     if (r.path) |path| {
         std.debug.print("requested path: {s}\n", .{path});
     }
@@ -25,7 +25,7 @@ pub fn main() !void {
         allocator,
         .{
             .port = 3000,
-            .on_request = on_request,
+            .on_request = onRequest,
             .log = true,
             .max_clients = 5000,
             .max_body_size = 100 * 1024 * 1024,
