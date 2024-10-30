@@ -1,7 +1,7 @@
 const std = @import("std");
 const Attribute = @import("attribute.zig");
 
-const Element = @This();
+pub const Element = @This();
 
 tag: []const u8,
 index: u16,
@@ -25,3 +25,11 @@ pub fn print(self: Element) void {
         std.debug.print("    key: {s}, value: {s}\n", .{ a.key, a.value });
     }
 }
+
+pub const Json = struct {
+    tag: []const u8,
+    index: u16,
+    innerHtml: []const u8,
+    attributes: []const Attribute,
+    price: []const u8,
+};

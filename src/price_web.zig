@@ -1,6 +1,6 @@
 const std = @import("std");
 const zap = @import("zap");
-const dom = @import("html/dom.zig");
+const Dom = @import("html/dom.zig");
 const Element = @import("html/element.zig");
 
 pub const Self = @This();
@@ -29,24 +29,31 @@ fn getPrices(e: *zap.Endpoint, r: zap.Request) void {
         _ = path;
         
         const url = "https://lindypress.net/book?pk=5";
-        const html = dom.getHtml(url, self.alloc) catch return;
-        defer self.alloc.free(html);
 
-        var elements = std.ArrayList(Element).init(self.alloc);
-        defer elements.deinit();
+        var dom = Dom.init(self.alloc);
+        defer dom.deinit();
 
-        dom.getElements(html, &elements) catch return;
-        dom.toElementsWithPrice(&elements) catch return;
+        dom.getHtml(url) catch return;
+        dom.getElements() catch return;
+        dom.toElementsWithPrice() catch return;
 
         // std.json.stringify(elements.items[0], .{}, elements.items[0].writer()) catch return;
 
-        elements.items[0].print();
-        
-        var string = std.ArrayList(u8).init(self.alloc);
-        defer string.deinit();
+        // elements.items[0].print();
 
-        std.json.stringify(.{ .price = elements.items[0].price, .inner_html = elements.items[0].inner_html }, .{}, string.writer()) catch return;
-        r.sendJson(string.items) catch return;
+        // const json = std.json.stringifyAlloc(self.alloc, elements.items[0], .{}) catch return;
+        // const json = std.json.stringifyAlloc(self.alloc, .{ .price = dom.elements.items[0].price, .inner_html = dom.elements.items[0].inner_html }, .{}) catch return;
+        // defer self.alloc.free(json);
+
+        const json = dom.elementsToJson() catch return;
+        defer self.alloc.free(json);
+
+        r.sendJson(json) catch return;
+        
+        // var string = std.ArrayList(u8).init(self.alloc);
+        // defer string.deinit();
+        // std.json.stringify(.{ .price = elements.items[0].price, .inner_html = elements.items[0].inner_html }, .{}, string.writer()) catch return;
+        // r.sendJson(string.items) catch return;
 
         // var json_buf: [256]u8 = undefined;
         // if (zap.stringifyBuf(&json_buf, .{ .status = "OK" }, .{})) |json| {

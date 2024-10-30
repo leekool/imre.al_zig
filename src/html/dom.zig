@@ -4,11 +4,29 @@ const mem = std.mem;
 const Element = @import("element.zig");
 const Attribute = @import("attribute.zig");
 
-pub fn getHtml(url: []const u8, allocator: mem.Allocator) ![]const u8 {
-    var c = http.Client{ .allocator = allocator };
+pub const Dom = @This();
+
+alloc: std.mem.Allocator = undefined,
+html: []const u8 = undefined,
+elements: std.ArrayList(Element) = undefined,
+
+pub fn init(a: std.mem.Allocator) Dom {
+    return .{ 
+        .alloc = a,
+        .elements = std.ArrayList(Element).init(a),
+    };
+}
+
+pub fn deinit(self: *Dom) void {
+    self.alloc.free(self.html);
+    self.elements.deinit();
+}
+
+pub fn getHtml(self: *Dom, url: []const u8) !void {
+    var c = http.Client{ .allocator = self.alloc };
     defer c.deinit();
 
-    var body_container = std.ArrayList(u8).init(allocator);
+    var body_container = std.ArrayList(u8).init(self.alloc);
 
     const fetch_options = http.Client.FetchOptions{ .location = http.Client.FetchOptions.Location{ .url = url }, .response_storage = .{ .dynamic = &body_container } };
 
@@ -17,9 +35,11 @@ pub fn getHtml(url: []const u8, allocator: mem.Allocator) ![]const u8 {
 
     if (res.status != .ok) std.log.err("getHtml failed: {s}\n", .{body});
 
-    return body;
+    self.html = body;
 }
-pub fn getElements(html: []const u8, elements: *std.ArrayList(Element)) !void {
+
+pub fn getElements(self: *Dom) !void {
+    const html = self.html;
     var element_count: u16 = 0;
 
     for (0.., html) |i, char| {
@@ -44,11 +64,28 @@ pub fn getElements(html: []const u8, elements: *std.ArrayList(Element)) !void {
 
         const element = Element{ .tag = tag, .index = element_count, .inner_html = inner, .attributes = .{ .items = attributes, .count = attribute_count } };
 
-        try elements.append(element);
+        try self.elements.append(element);
     }
 }
 
-pub fn fillElementAttributes(start_tag: []const u8, attributes: *[50]Attribute) usize {
+pub fn elementsToJson(self: *Dom) ![]const u8 {
+    var l = std.ArrayList(Element.Json).init(self.alloc);
+    defer l.deinit();
+
+    for (self.elements.items) |e| {
+        try l.append(Element.Json{
+            .tag = e.tag,
+            .index = e.index,
+            .innerHtml = e.inner_html,
+            .attributes = e.attributes.items[0..e.attributes.count],
+            .price = e.price orelse ""
+        });
+    }
+
+    return std.json.stringifyAlloc(self.alloc, l.items, .{});
+}
+
+fn fillElementAttributes(start_tag: []const u8, attributes: *[50]Attribute) usize {
     if (mem.startsWith(u8, start_tag, "script")) return 0; // todo: handle script tags
 
     // std.debug.print("start_tag: {s}\n", .{start_tag});
@@ -83,7 +120,7 @@ pub fn fillElementAttributes(start_tag: []const u8, attributes: *[50]Attribute) 
 }
 
 // returns what's between "<" and ">" including attributes
-pub fn getFirstOpeningTag(html: []const u8) ?[]const u8 {
+fn getFirstOpeningTag(html: []const u8) ?[]const u8 {
     const start_tag_end_index = mem.indexOf(u8, html, ">") orelse return null;
     const tag = html[1..start_tag_end_index];
 
@@ -94,7 +131,7 @@ pub fn getFirstOpeningTag(html: []const u8) ?[]const u8 {
     return tag;
 }
 
-pub fn getElementNameFromTag(tag: []const u8) []const u8 {
+fn getElementNameFromTag(tag: []const u8) []const u8 {
     var name = tag;
 
     const space_index_opt = mem.indexOf(u8, tag, " ");
@@ -106,7 +143,7 @@ pub fn getElementNameFromTag(tag: []const u8) []const u8 {
     return name;
 }
 
-pub fn getCloseTagIndex(html: []const u8, tag: []const u8) !?usize {
+fn getCloseTagIndex(html: []const u8, tag: []const u8) !?usize {
     var open_tag_count: usize = 1;
     var search_index: usize = 0;
     const open_tag_len = tag.len + 1; // "<" + tag
@@ -141,24 +178,25 @@ pub fn getCloseTagIndex(html: []const u8, tag: []const u8) !?usize {
     return null;
 }
 
-pub fn toElementsWithPrice(elements: *std.ArrayList(Element)) !void {
-    try removeElementsWithChildren(elements);
+pub fn toElementsWithPrice(self: *Dom) !void {
+    // try removeElementsWithChildren(self.elements);
+    try removeElementsWithChildren(self);
 
     var count: usize = 0;
 
-    for (elements.items) |*element| {
+    for (self.elements.items) |*element| {
         if (mem.indexOf(u8, element.tag, "script") != null) continue; // todo: handle script tag
         if (!getPrice(element)) continue;
 
-        elements.items[count] = element.*;
+        self.elements.items[count] = element.*;
         count += 1;
     }
 
-    try elements.resize(count);
+    try self.elements.resize(count);
 }
 
 // assumes element's inner html includes "$"
-pub fn getPrice(element: *Element) bool {
+fn getPrice(element: *Element) bool {
     // if (!hasNumber(element.inner_html)) return false;
 
     const start_index = mem.indexOf(u8, element.inner_html, "$") orelse return false;
@@ -194,7 +232,7 @@ pub fn getPrice(element: *Element) bool {
     return true;
 }
 
-pub fn hasNumber(slice: []const u8) bool {
+fn hasNumber(slice: []const u8) bool {
     for (slice) |byte| {
         if (byte >= '0' and byte <= '9') return true;
     }
@@ -203,16 +241,16 @@ pub fn hasNumber(slice: []const u8) bool {
 }
 
 // very basic check for elements with children
-pub fn removeElementsWithChildren(elements: *std.ArrayList(Element)) !void {
+fn removeElementsWithChildren(self: *Dom) !void {
     var count: usize = 0;
 
-    for (elements.items) |element| {
+    for (self.elements.items) |element| {
         if (mem.indexOf(u8, element.inner_html, "</") != null) continue;
         if (mem.indexOf(u8, element.inner_html, "/>") != null) continue;
 
-        elements.items[count] = element;
+        self.elements.items[count] = element;
         count += 1;
     }
 
-    try elements.resize(count);
+    try self.elements.resize(count);
 }
