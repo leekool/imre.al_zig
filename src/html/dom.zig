@@ -11,7 +11,7 @@ html: []const u8 = undefined,
 elements: std.ArrayList(Element) = undefined,
 
 pub fn init(a: std.mem.Allocator) Dom {
-    return .{ 
+    return .{
         .alloc = a,
         .elements = std.ArrayList(Element).init(a),
     };
@@ -28,14 +28,83 @@ pub fn getHtml(self: *Dom, url: []const u8) !void {
 
     var body_container = std.ArrayList(u8).init(self.alloc);
 
-    const fetch_options = http.Client.FetchOptions{ .location = http.Client.FetchOptions.Location{ .url = url }, .response_storage = .{ .dynamic = &body_container } };
+    const extra_headers = try getExtraHeaders(self, url);
+    defer self.alloc.free(extra_headers);
 
-    const res = try c.fetch(fetch_options);
+    const fetch_options = http.Client.FetchOptions{
+        .location = http.Client.FetchOptions.Location{
+            .url = url,
+        },
+        .headers = http.Client.Request.Headers{
+            .user_agent = http.Client.Request.Headers.Value{ .override = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36" },
+        },
+        // .extra_headers = &[_]http.Header{
+        //     .{
+        //         .name = "Referer",
+        //         .value = referer_url
+        //     },
+        // },
+        .extra_headers = extra_headers,
+        .response_storage = .{
+            .dynamic = &body_container,
+        },
+    };
+
+    const res = c.fetch(fetch_options) catch |err| {
+        std.debug.print("[getHtml] res: {}\n", .{err});
+        return err;
+    };
+
     const body = try body_container.toOwnedSlice();
 
-    if (res.status != .ok) std.log.err("getHtml failed: {s}\n", .{body});
+    if (res.status != .ok) std.debug.print("[getHtml] res: {s}\n", .{body});
 
     self.html = body;
+}
+
+pub fn getExtraHeaders(self: *Dom, url: []const u8) ![]http.Header {
+    const archive_url = "https://web.archive.org/web/";
+
+    var buf: [10]u8 = undefined;
+    const now = std.time.timestamp();
+    const now_str = try std.fmt.bufPrint(&buf, "{}", .{now});
+
+    var referer_url = std.ArrayList(u8).init(self.alloc);
+    try referer_url.appendSlice(archive_url);
+    try referer_url.appendSlice(now_str);
+    try referer_url.appendSlice(url);
+    // const referer_url: []const u8 = try std.mem.concat(self.alloc, u8, &[_][]const u8{ archive_url, now_str, url });
+    // defer self.alloc.free(referer_url);
+    defer referer_url.deinit();
+
+    var headers = std.ArrayList(http.Header).init(self.alloc);
+
+    try headers.append(http.Header{
+        .name = "sec-ch-ua-platform",
+        .value = "\"Windows\"",
+    });
+    try headers.append(http.Header{
+        .name = "sec-ch-ua-platform",
+        .value = "\"Windows\"",
+    });
+    try headers.append(http.Header{
+        .name = "sec-ch-ua",
+        .value = "\"Chromium\";v=\"130\", \"Google Chrome\";v=\"130\", \"Not?A_Brand\";v=\"99\"",
+    });
+    try headers.append(http.Header{
+        .name = "sec-ch-ua-mobile",
+        .value = "?0",
+    });
+    // try headers.append(http.Header{
+    //     .name = "Referer",
+    //     .value = try referer_url.toOwnedSlice(),
+    // });
+    try headers.append(http.Header{
+        .name = "DNT",
+        .value = "1",
+    });
+
+    return headers.toOwnedSlice();
 }
 
 pub fn getElements(self: *Dom) !void {
@@ -73,13 +142,7 @@ pub fn elementsToJson(self: *Dom) ![]const u8 {
     defer l.deinit();
 
     for (self.elements.items) |e| {
-        try l.append(Element.Json{
-            .tag = e.tag,
-            .index = e.index,
-            .innerHtml = e.inner_html,
-            .attributes = e.attributes.items[0..e.attributes.count],
-            .price = e.price orelse ""
-        });
+        try l.append(Element.Json{ .tag = e.tag, .index = e.index, .innerHtml = e.inner_html, .attributes = e.attributes.items[0..e.attributes.count], .price = e.price orelse "" });
     }
 
     return std.json.stringifyAlloc(self.alloc, l.items, .{});
