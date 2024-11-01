@@ -29,7 +29,10 @@ pub fn getHtml(self: *Dom, url: []const u8) !void {
     var body_container = std.ArrayList(u8).init(self.alloc);
 
     const extra_headers = try getExtraHeaders(self, url);
-    defer self.alloc.free(extra_headers);
+    defer {
+        self.alloc.free(extra_headers[0].value); // is this normal
+        self.alloc.free(extra_headers);
+    }
 
     const fetch_options = http.Client.FetchOptions{
         .location = http.Client.FetchOptions.Location{
@@ -38,12 +41,6 @@ pub fn getHtml(self: *Dom, url: []const u8) !void {
         .headers = http.Client.Request.Headers{
             .user_agent = http.Client.Request.Headers.Value{ .override = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36" },
         },
-        // .extra_headers = &[_]http.Header{
-        //     .{
-        //         .name = "Referer",
-        //         .value = referer_url
-        //     },
-        // },
         .extra_headers = extra_headers,
         .response_storage = .{
             .dynamic = &body_container,
@@ -62,49 +59,42 @@ pub fn getHtml(self: *Dom, url: []const u8) !void {
     self.html = body;
 }
 
-pub fn getExtraHeaders(self: *Dom, url: []const u8) ![]http.Header {
+pub fn getExtraHeaders(self: *Dom, url: []const u8) ![]const http.Header {
     const archive_url = "https://web.archive.org/web/";
 
     var buf: [10]u8 = undefined;
     const now = std.time.timestamp();
     const now_str = try std.fmt.bufPrint(&buf, "{}", .{now});
+    const referer_url = try std.mem.concat(self.alloc, u8, &[_][]const u8{ archive_url, now_str, url });
 
-    var referer_url = std.ArrayList(u8).init(self.alloc);
-    try referer_url.appendSlice(archive_url);
-    try referer_url.appendSlice(now_str);
-    try referer_url.appendSlice(url);
-    // const referer_url: []const u8 = try std.mem.concat(self.alloc, u8, &[_][]const u8{ archive_url, now_str, url });
-    // defer self.alloc.free(referer_url);
-    defer referer_url.deinit();
+    const headers = try self.alloc.alloc(http.Header, 6);
 
-    var headers = std.ArrayList(http.Header).init(self.alloc);
-
-    try headers.append(http.Header{
+    headers[0] = .{
+        .name = "Referer",
+        .value = referer_url,
+    };
+    headers[1] = .{
         .name = "sec-ch-ua-platform",
         .value = "\"Windows\"",
-    });
-    try headers.append(http.Header{
+    };
+    headers[2] = .{
         .name = "sec-ch-ua-platform",
         .value = "\"Windows\"",
-    });
-    try headers.append(http.Header{
+    };
+    headers[3] = .{
         .name = "sec-ch-ua",
         .value = "\"Chromium\";v=\"130\", \"Google Chrome\";v=\"130\", \"Not?A_Brand\";v=\"99\"",
-    });
-    try headers.append(http.Header{
+    };
+    headers[4] = .{
         .name = "sec-ch-ua-mobile",
         .value = "?0",
-    });
-    // try headers.append(http.Header{
-    //     .name = "Referer",
-    //     .value = try referer_url.toOwnedSlice(),
-    // });
-    try headers.append(http.Header{
+    };
+    headers[5] = .{
         .name = "DNT",
         .value = "1",
-    });
+    };
 
-    return headers.toOwnedSlice();
+    return headers;
 }
 
 pub fn getElements(self: *Dom) !void {
