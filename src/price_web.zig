@@ -41,14 +41,8 @@ fn getPrices(e: *zap.Endpoint, r: zap.Request) void {
 
     // std.debug.print("html: {s}\n", .{dom.html.?});
 
-    dom.getElements() catch {
-        std.debug.print("getElements\n", .{});
-        return;
-    };
-    dom.toElementsWithPrice() catch {
-        std.debug.print("toElementsWithPrice\n", .{});
-        return;
-    };
+    dom.getElements() catch return;
+    dom.toElementsWithPrice() catch return;
     dom.printElements();
 
     const json = dom.elementsToJson() catch return;

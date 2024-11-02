@@ -124,15 +124,8 @@ pub fn getElements(self: *Dom) !void {
 
         element_count += 1;
 
-        // var attributes: [128]Attribute = undefined;
-        // const attribute_count = fillElementAttributes(full_tag, &attributes);
-        // const element = Element{ .tag = tag, .index = element_count, .inner_html = inner, .attributes = .{ .items = attributes, .count = attribute_count } };
-
         var element = Element{ .tag = tag, .index = element_count, .inner_html = inner };
-        fillElementAttributes(self, full_tag, &element) catch {
-            std.debug.print("fillElementAttributes\n", .{});
-            return error.ElementAttributesError;
-        };
+        fillElementAttributes(self, full_tag, &element) catch |err| return err;
 
         try self.elements.append(element);
     }
@@ -261,8 +254,10 @@ pub fn toElementsWithPrice(self: *Dom) !void {
     var count: usize = 0;
 
     for (self.elements.items) |*element| {
-        // todo: handle script tag
-        if (!getPrice(element) or mem.indexOf(u8, element.tag, "script") != null) {
+        if (!getPrice(element) or
+            std.mem.eql(u8, element.tag, "script") or
+            std.mem.eql(u8, element.tag, "img"))
+        {
             if (element.attributes) |attributes| self.alloc.free(attributes);
             continue;
         }
@@ -274,7 +269,6 @@ pub fn toElementsWithPrice(self: *Dom) !void {
     try self.elements.resize(count);
 }
 
-// assumes element's inner html includes "$"
 fn getPrice(element: *Element) bool {
     // if (!hasNumber(element.inner_html)) return false;
 
@@ -285,10 +279,15 @@ fn getPrice(element: *Element) bool {
     var last_digit_index: ?usize = null;
 
     for (0.., start_slice) |i, byte| {
-        if (!std.ascii.isDigit(byte)) continue;
+        // std.debug.print("{s}: {c}\n", .{ element.tag, byte });
+        if (byte == ' ' or byte == '\n' or byte == '$') continue;
 
-        first_digit_index = i;
-        break;
+        if (!std.ascii.isDigit(byte)) {
+            return false;
+        } else {
+            first_digit_index = i;
+            break;
+        }
     }
 
     if (first_digit_index == null) return false;
