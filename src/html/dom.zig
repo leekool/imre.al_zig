@@ -7,8 +7,8 @@ const Attribute = @import("attribute.zig");
 pub const Dom = @This();
 
 alloc: std.mem.Allocator = undefined,
-html: []const u8 = undefined,
 elements: std.ArrayList(Element) = undefined,
+html: ?[]const u8 = null,
 
 pub fn init(a: std.mem.Allocator) Dom {
     return .{
@@ -18,7 +18,7 @@ pub fn init(a: std.mem.Allocator) Dom {
 }
 
 pub fn deinit(self: *Dom) void {
-    self.alloc.free(self.html);
+    if (self.html) |html| self.alloc.free(html);
     self.elements.deinit();
 }
 
@@ -98,7 +98,7 @@ pub fn getExtraHeaders(self: *Dom, url: []const u8) ![]const http.Header {
 }
 
 pub fn getElements(self: *Dom) !void {
-    const html = self.html;
+    const html = self.html orelse return;
     var element_count: u16 = 0;
 
     for (0.., html) |i, char| {

@@ -27,7 +27,7 @@ pub fn main() !void {
         defer dom.deinit();
 
         try dom.getHtml(arg);
-        std.debug.print("{s}\n", .{ dom.html });
+        // std.debug.print("{s}\n", .{ dom.html });
         return;
     }
     // -----
