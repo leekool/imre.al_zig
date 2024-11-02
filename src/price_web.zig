@@ -30,7 +30,6 @@ fn getPrices(e: *zap.Endpoint, r: zap.Request) void {
     // need to find out why defer causes a segmentation fault...
     if (r.query) |query| {
         url = std.mem.concat(self.alloc, u8, &[_][]const u8{ url, "?", query }) catch return;
-        // defer self.alloc.free(url);
         std.debug.print("url: {s}\n", .{url});
     }
 
@@ -40,10 +39,17 @@ fn getPrices(e: *zap.Endpoint, r: zap.Request) void {
     dom.getHtml(url) catch return;
     if (r.query != null) self.alloc.free(url);
 
-    // std.debug.print("html: {s}\n", .{dom.html});
+    // std.debug.print("html: {s}\n", .{dom.html.?});
 
-    dom.getElements() catch return;
-    dom.toElementsWithPrice() catch return;
+    dom.getElements() catch {
+        std.debug.print("getElements\n", .{});
+        return;
+    };
+    dom.toElementsWithPrice() catch {
+        std.debug.print("toElementsWithPrice\n", .{});
+        return;
+    };
+    dom.printElements();
 
     const json = dom.elementsToJson() catch return;
     defer self.alloc.free(json);

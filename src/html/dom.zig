@@ -19,6 +19,11 @@ pub fn init(a: std.mem.Allocator) Dom {
 
 pub fn deinit(self: *Dom) void {
     if (self.html) |html| self.alloc.free(html);
+
+    for (self.elements.items) |element| {
+        if (element.attributes) |attributes| self.alloc.free(attributes);
+    }
+
     self.elements.deinit();
 }
 
@@ -113,15 +118,21 @@ pub fn getElements(self: *Dom) !void {
         const close_tag_index = try getCloseTagIndex(html[inner_start_index..], tag) orelse continue;
         const inner_end_index = close_tag_index + inner_start_index;
 
-        const inner = html[inner_start_index..inner_end_index];
+        var inner = html[inner_start_index..inner_end_index];
+        inner = mem.trim(u8, inner, &[_]u8{ ' ', '\n' });
         if (inner.len == 0) continue;
 
         element_count += 1;
 
-        var attributes: [50]Attribute = undefined;
-        const attribute_count = fillElementAttributes(full_tag, &attributes);
+        // var attributes: [128]Attribute = undefined;
+        // const attribute_count = fillElementAttributes(full_tag, &attributes);
+        // const element = Element{ .tag = tag, .index = element_count, .inner_html = inner, .attributes = .{ .items = attributes, .count = attribute_count } };
 
-        const element = Element{ .tag = tag, .index = element_count, .inner_html = inner, .attributes = .{ .items = attributes, .count = attribute_count } };
+        var element = Element{ .tag = tag, .index = element_count, .inner_html = inner };
+        fillElementAttributes(self, full_tag, &element) catch {
+            std.debug.print("fillElementAttributes\n", .{});
+            return error.ElementAttributesError;
+        };
 
         try self.elements.append(element);
     }
@@ -132,20 +143,28 @@ pub fn elementsToJson(self: *Dom) ![]const u8 {
     defer l.deinit();
 
     for (self.elements.items) |e| {
-        try l.append(Element.Json{ .tag = e.tag, .index = e.index, .innerHtml = e.inner_html, .attributes = e.attributes.items[0..e.attributes.count], .price = e.price orelse "" });
+        const element_json = Element.Json{
+            .tag = e.tag,
+            .index = e.index,
+            .innerHtml = e.inner_html,
+            // .attributes = e.attributes,
+            .price = e.price,
+        };
+
+        try l.append(element_json);
     }
 
-    return std.json.stringifyAlloc(self.alloc, l.items, .{});
+    const json = try std.json.stringifyAlloc(self.alloc, l.items, .{});
+    return json;
 }
 
-fn fillElementAttributes(start_tag: []const u8, attributes: *[50]Attribute) usize {
-    if (mem.startsWith(u8, start_tag, "script")) return 0; // todo: handle script tags
-
-    // std.debug.print("start_tag: {s}\n", .{start_tag});
+fn fillElementAttributes(self: *Dom, start_tag: []const u8, element: *Element) !void {
+    if (mem.startsWith(u8, start_tag, "script")) return; // todo: handle script tags
 
     var attribute_count: usize = 0;
-    var base_index: usize = 0;
+    var attributes = std.ArrayList(Attribute).init(self.alloc);
 
+    var base_index: usize = 0;
     while (base_index < start_tag.len) {
         const start = start_tag[base_index..];
 
@@ -160,16 +179,20 @@ fn fillElementAttributes(start_tag: []const u8, attributes: *[50]Attribute) usiz
         const value_end_index = mem.indexOf(u8, start[value_start..], &[1]u8{value_surround_char}) orelse break;
 
         var value = start[value_start .. value_start + value_end_index];
-        value = mem.trim(u8, value, &[2]u8{ ' ', '\n' });
+        value = mem.trim(u8, value, &[_]u8{ ' ', '\n' });
 
         base_index += value_start + value_end_index + 1;
         if (value.len == 0 or key.len == 0) continue;
 
-        attributes[attribute_count] = Attribute{ .key = key, .value = value };
+        const attribute = Attribute{ .key = key, .value = value };
+        try attributes.append(attribute);
+
         attribute_count += 1;
     }
 
-    return attribute_count;
+    try attributes.resize(attribute_count);
+
+    element.attributes = try attributes.toOwnedSlice();
 }
 
 // returns what's between "<" and ">" including attributes
@@ -238,8 +261,11 @@ pub fn toElementsWithPrice(self: *Dom) !void {
     var count: usize = 0;
 
     for (self.elements.items) |*element| {
-        if (mem.indexOf(u8, element.tag, "script") != null) continue; // todo: handle script tag
-        if (!getPrice(element)) continue;
+        // todo: handle script tag
+        if (!getPrice(element) or mem.indexOf(u8, element.tag, "script") != null) {
+            if (element.attributes) |attributes| self.alloc.free(attributes);
+            continue;
+        }
 
         self.elements.items[count] = element.*;
         count += 1;
@@ -298,12 +324,20 @@ fn removeElementsWithChildren(self: *Dom) !void {
     var count: usize = 0;
 
     for (self.elements.items) |element| {
-        if (mem.indexOf(u8, element.inner_html, "</") != null) continue;
-        if (mem.indexOf(u8, element.inner_html, "/>") != null) continue;
+        if (mem.indexOf(u8, element.inner_html, "</") != null or mem.indexOf(u8, element.inner_html, "/>") != null) {
+            if (element.attributes) |attributes| self.alloc.free(attributes);
+            continue;
+        }
 
         self.elements.items[count] = element;
         count += 1;
     }
 
     try self.elements.resize(count);
+}
+
+pub fn printElements(self: *Dom) void {
+    for (self.elements.items) |element| {
+        element.print();
+    }
 }
