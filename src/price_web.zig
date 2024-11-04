@@ -27,17 +27,16 @@ fn getPrices(e: *zap.Endpoint, r: zap.Request) void {
 
     var url = path[e.settings.path.len + 1 ..];
 
-    // need to find out why defer causes a segmentation fault...
     if (r.query) |query| {
         url = std.mem.concat(self.alloc, u8, &[_][]const u8{ url, "?", query }) catch return;
-        std.debug.print("url: {s}\n", .{url});
+        defer self.alloc.free(url);
     }
 
     var dom = Dom.init(self.alloc);
     defer dom.deinit();
 
     dom.getHtml(url) catch return;
-    if (r.query != null) self.alloc.free(url);
+    // if (r.query != null) self.alloc.free(url);
 
     // std.debug.print("html: {s}\n", .{dom.html.?});
 
