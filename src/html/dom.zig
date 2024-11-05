@@ -248,7 +248,6 @@ fn getCloseTagIndex(html: []const u8, tag: []const u8) !?usize {
 }
 
 pub fn toElementsWithPrice(self: *Dom) !void {
-    // try removeElementsWithChildren(self.elements);
     try removeElementsWithChildren(self);
 
     var count: usize = 0;
@@ -279,7 +278,6 @@ fn getPrice(element: *Element) bool {
     var last_digit_index: ?usize = null;
 
     for (0.., start_slice) |i, byte| {
-        // std.debug.print("{s}: {c}\n", .{ element.tag, byte });
         if (byte == ' ' or byte == '\n' or byte == '$') continue;
 
         if (!std.ascii.isDigit(byte)) {
@@ -300,7 +298,7 @@ fn getPrice(element: *Element) bool {
 
         if (std.ascii.isDigit(byte) or byte == '.' or byte == ',') continue;
 
-        last_digit_index = first_digit_index.? + i + 1;
+        last_digit_index = first_digit_index.? + i;
         break;
     }
 
