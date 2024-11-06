@@ -24,12 +24,11 @@ pub fn print(self: Element) void {
     std.debug.print("  inner_html: {s}\n", .{self.inner_html});
 
     if (self.price != null) std.debug.print("  price:      {s}\n", .{self.price.?});
-    // if (self.attributes.count > 0) std.debug.print("  attributes: {}\n", .{self.attributes.count});
-    // for (self.attributes.items[0..self.attributes.count]) |a| {
-    //     std.debug.print("    key: {s}, value: {s}\n", .{ a.key, a.value });
-    // }
 
-    if (self.attributes) |attributes| for (attributes) |a| {
-        std.debug.print("    key: {s}, value: {s}\n", .{ a.key, a.value });
-    };
+    if (self.attributes) |attributes| {
+        std.debug.print("  attributes: {}\n", .{attributes.len});
+        for (attributes) |a| {
+            std.debug.print("    key: {s}, value: {s}\n", .{ a.key, a.value });
+        }
+    }
 }

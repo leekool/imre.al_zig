@@ -36,10 +36,6 @@ fn getPrices(e: *zap.Endpoint, r: zap.Request) void {
     defer dom.deinit();
 
     dom.getHtml(url) catch return;
-    // if (r.query != null) self.alloc.free(url);
-
-    // std.debug.print("html: {s}\n", .{dom.html.?});
-
     dom.getElements() catch return;
     dom.toElementsWithPrice() catch return;
     dom.printElements();
