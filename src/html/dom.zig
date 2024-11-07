@@ -70,6 +70,7 @@ pub fn getExtraHeaders(self: *Dom, url: []const u8) ![]const http.Header {
     var buf: [10]u8 = undefined;
     const now = std.time.timestamp();
     const now_str = try std.fmt.bufPrint(&buf, "{}", .{now});
+    std.debug.print("getExtraHeaders: {s}, {s}, {s}\n", .{ archive_url, now_str, url });
     const referer_url = try std.mem.concat(self.alloc, u8, &[_][]const u8{ archive_url, now_str, url });
 
     const headers = try self.alloc.alloc(http.Header, 6);

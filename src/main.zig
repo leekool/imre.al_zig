@@ -14,23 +14,10 @@ fn onRequest(r: zap.Request) void {
 }
 
 pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
+    // var gpa = std.heap.GeneralPurposeAllocator(.{ .thread_safe = true }){};
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer std.debug.assert(gpa.deinit() == .ok);
     const allocator = gpa.allocator();
-
-    // testing
-    var args = std.process.args();
-    _ = args.skip();
-
-    if (args.next()) |arg| {
-        var dom = Dom.init(allocator);
-        defer dom.deinit();
-
-        try dom.getHtml(arg);
-        // std.debug.print("{s}\n", .{ dom.html });
-        return;
-    }
-    // -----
 
     var listener = zap.Endpoint.Listener.init(
         allocator,

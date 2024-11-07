@@ -29,13 +29,15 @@ fn getPrices(e: *zap.Endpoint, r: zap.Request) void {
 
     if (r.query) |query| {
         url = std.mem.concat(self.alloc, u8, &[_][]const u8{ url, "?", query }) catch return;
-        defer self.alloc.free(url);
+        std.debug.print("[getPrices] url: {s}\n", .{ url });
     }
 
     var dom = Dom.init(self.alloc);
     defer dom.deinit();
 
     dom.getHtml(url) catch return;
+    if (r.query != null) self.alloc.free(url);
+
     dom.getElements() catch return;
     dom.toElementsWithPrice() catch return;
     dom.printElements();
