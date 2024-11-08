@@ -254,7 +254,7 @@ pub fn toElementsWithPrice(self: *Dom) !void {
     var count: usize = 0;
 
     for (self.elements.items) |*element| {
-        if (!getPrice(element) or
+        if (!getPrice(self, element) or
             std.mem.eql(u8, element.tag, "script") or
             std.mem.eql(u8, element.tag, "img"))
         {
@@ -269,9 +269,7 @@ pub fn toElementsWithPrice(self: *Dom) !void {
     try self.elements.resize(count);
 }
 
-fn getPrice(element: *Element) bool {
-    // if (!hasNumber(element.inner_html)) return false;
-
+fn getPrice(self: *Dom, element: *Element) bool {
     const start_index = mem.indexOf(u8, element.inner_html, "$") orelse return false;
     const start_slice = element.inner_html[start_index..];
 
@@ -307,9 +305,13 @@ fn getPrice(element: *Element) bool {
         break;
     }
 
-    const price_str = start_slice[first_digit_index.?..last_digit_index.?];
-    var price: u16 = undefined;
+    // replace ',' with '_' for parseInt's sake
+    const price_slice = start_slice[first_digit_index.?..last_digit_index.?];
+    var price_str = self.alloc.dupe(u8, price_slice) catch return false;
+    defer self.alloc.free(price_str);
+    _ = std.mem.replaceScalar(u8, price_str, ',', '_');
 
+    var price: u16 = undefined;
     if (std.mem.indexOf(u8, price_str, ".")) |i| {
         price = std.fmt.parseInt(u16, price_str[0..i], 10) catch return false;
 
