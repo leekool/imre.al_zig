@@ -291,21 +291,35 @@ fn getPrice(element: *Element) bool {
 
     if (first_digit_index == null) return false;
 
+    var point_index: ?usize = null;
     for (0.., start_slice[first_digit_index.?..]) |i, byte| {
-        if (i == start_slice[first_digit_index.?..].len - 1) {
+        if (i == start_slice[first_digit_index.?..].len - 1 or
+            point_index != null and i == point_index.? + 2)
+        {
             last_digit_index = first_digit_index.? + i + 1;
             break;
         }
 
-        if (std.ascii.isDigit(byte) or byte == '.' or byte == ',') continue;
+        if (byte == '.') point_index = i;
+        if (std.ascii.isDigit(byte) or byte == ',' or byte == '.') continue;
 
         last_digit_index = first_digit_index.? + i;
         break;
     }
 
-    const price = start_slice[first_digit_index.?..last_digit_index.?];
-    element.price = price;
+    const price_str = start_slice[first_digit_index.?..last_digit_index.?];
+    var price: u16 = undefined;
 
+    if (std.mem.indexOf(u8, price_str, ".")) |i| {
+        price = std.fmt.parseInt(u16, price_str[0..i], 10) catch return false;
+
+        const decimal = std.fmt.parseInt(u8, price_str[i + 1 ..], 10) catch return false;
+        if (decimal >= 50) price += 1;
+    } else {
+        price = std.fmt.parseInt(u16, price_str, 10) catch return false;
+    }
+
+    element.price = price;
     return true;
 }
 
