@@ -6,11 +6,11 @@ const Attribute = @import("attribute.zig");
 
 pub const Dom = @This();
 
-alloc: std.mem.Allocator = undefined,
+alloc: mem.Allocator = undefined,
 elements: std.ArrayList(Element) = undefined,
 html: ?[]const u8 = null,
 
-pub fn init(a: std.mem.Allocator) Dom {
+pub fn init(a: mem.Allocator) Dom {
     return .{
         .alloc = a,
         .elements = std.ArrayList(Element).init(a),
@@ -71,7 +71,7 @@ pub fn getExtraHeaders(self: *Dom, url: []const u8) ![]const http.Header {
     const now = std.time.timestamp();
     const now_str = try std.fmt.bufPrint(&buf, "{}", .{now});
     std.debug.print("getExtraHeaders: {s}, {s}, {s}\n", .{ archive_url, now_str, url });
-    const referer_url = try std.mem.concat(self.alloc, u8, &[_][]const u8{ archive_url, now_str, url });
+    const referer_url = try mem.concat(self.alloc, u8, &[_][]const u8{ archive_url, now_str, url });
 
     const headers = try self.alloc.alloc(http.Header, 6);
 
@@ -255,8 +255,8 @@ pub fn toElementsWithPrice(self: *Dom) !void {
 
     for (self.elements.items) |*element| {
         if (!getPrice(self, element) or
-            std.mem.eql(u8, element.tag, "script") or
-            std.mem.eql(u8, element.tag, "img"))
+            mem.eql(u8, element.tag, "script") or
+            mem.eql(u8, element.tag, "img"))
         {
             if (element.attributes) |attributes| self.alloc.free(attributes);
             continue;
@@ -269,8 +269,13 @@ pub fn toElementsWithPrice(self: *Dom) !void {
     try self.elements.resize(count);
 }
 
+fn priceStartIndex(element: *Element) ?usize {
+    if (mem.indexOf(u8, element.inner_html, "$")) |index| return index;
+    return null;
+}
+
 fn getPrice(self: *Dom, element: *Element) bool {
-    const start_index = mem.indexOf(u8, element.inner_html, "$") orelse return false;
+    const start_index = priceStartIndex(element) orelse return false;
     const start_slice = element.inner_html[start_index..];
 
     var first_digit_index: ?usize = null;
@@ -292,7 +297,7 @@ fn getPrice(self: *Dom, element: *Element) bool {
     var point_index: ?usize = null;
     for (0.., start_slice[first_digit_index.?..]) |i, byte| {
         if (i == start_slice[first_digit_index.?..].len - 1 or
-            point_index != null and i == point_index.? + 2)
+            point_index != null and i == point_index.? + 2) // only capture 2 decimals
         {
             last_digit_index = first_digit_index.? + i + 1;
             break;
@@ -309,10 +314,10 @@ fn getPrice(self: *Dom, element: *Element) bool {
     const price_slice = start_slice[first_digit_index.?..last_digit_index.?];
     var price_str = self.alloc.dupe(u8, price_slice) catch return false;
     defer self.alloc.free(price_str);
-    _ = std.mem.replaceScalar(u8, price_str, ',', '_');
+    _ = mem.replaceScalar(u8, price_str, ',', '_');
 
     var price: u16 = undefined;
-    if (std.mem.indexOf(u8, price_str, ".")) |i| {
+    if (mem.indexOf(u8, price_str, ".")) |i| {
         price = std.fmt.parseInt(u16, price_str[0..i], 10) catch return false;
 
         const decimal = std.fmt.parseInt(u8, price_str[i + 1 ..], 10) catch return false;
