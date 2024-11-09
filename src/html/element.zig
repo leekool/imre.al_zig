@@ -5,7 +5,7 @@ pub const Json = struct {
     tag: []const u8,
     index: u16,
     innerHtml: []const u8,
-    // attributes: ?[]Attribute,
+    attributes: ?[]Attribute,
     price: ?u16,
 };
 
@@ -23,7 +23,6 @@ pub fn print(self: Element) void {
     std.debug.print("  tag:        {s}\n", .{self.tag});
     std.debug.print("  inner_html: {s}\n", .{self.inner_html});
 
-    // if (self.price != null) std.debug.print("  price:      {s}\n", .{self.price.?});
     if (self.price != null) std.debug.print("  price:      {d:.2}\n", .{self.price.?});
 
     if (self.attributes) |attributes| {

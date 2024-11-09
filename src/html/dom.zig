@@ -141,7 +141,7 @@ pub fn elementsToJson(self: *Dom) ![]const u8 {
             .tag = e.tag,
             .index = e.index,
             .innerHtml = e.inner_html,
-            // .attributes = e.attributes,
+            .attributes = e.attributes orelse null,
             .price = e.price,
         };
 
