@@ -26,7 +26,7 @@ pub fn build(b: *std.Build) void {
     const zap = b.dependency("zap", .{
         .target = target,
         .optimize = optimize,
-        .openssl = false
+        .openssl = false,
     });
 
     // This declares intent for the library to be installed into the standard
