@@ -164,7 +164,7 @@ fn fillElementAttributes(self: *Dom, start_tag: []const u8, element: *Element) !
 
         const equal_index = mem.indexOf(u8, start, "=") orelse break;
         const key_start = mem.lastIndexOf(u8, start[0..equal_index], " ") orelse break;
-        const key = start[key_start..equal_index];
+        var key = start[key_start..equal_index];
 
         const value_surround_char = start[equal_index + 1];
         if (value_surround_char != '"' and value_surround_char != '\'') break;
@@ -173,10 +173,13 @@ fn fillElementAttributes(self: *Dom, start_tag: []const u8, element: *Element) !
         const value_end_index = mem.indexOf(u8, start[value_start..], &[1]u8{value_surround_char}) orelse break;
 
         var value = start[value_start .. value_start + value_end_index];
-        value = mem.trim(u8, value, &[_]u8{ ' ', '\n' });
 
         base_index += value_start + value_end_index + 1;
         if (value.len == 0 or key.len == 0) continue;
+
+        // trim both key & value
+        key = mem.trim(u8, value, &[_]u8{ ' ', '\n' });
+        value = mem.trim(u8, value, &[_]u8{ ' ', '\n' });
 
         const attribute = Attribute{ .key = key, .value = value };
         try attributes.append(attribute);
