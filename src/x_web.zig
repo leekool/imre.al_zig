@@ -2,6 +2,7 @@ const std = @import("std");
 const zap = @import("zap");
 const Dom = @import("html/dom.zig");
 const Element = @import("html/element.zig");
+const Tweet = @import("tweet.zig");
 
 pub const Self = @This();
 
@@ -31,13 +32,47 @@ fn getTweet(e: *zap.Endpoint, r: zap.Request) void {
 
     const id = path[e.settings.path.len + 1 ..];
     const url = std.mem.concat(self.alloc, u8, &[_][]const u8{ part_one, id, part_two }) catch return;
+    defer self.alloc.free(url);
 
     var dom = Dom.init(self.alloc);
     defer dom.deinit();
 
     dom.getHtml(url) catch return;
-    self.alloc.free(url);
 
-    const json = dom.html orelse return;
+    const full_tweet = std.json.parseFromSlice(std.json.Value, self.alloc, dom.html orelse return, .{}) catch |err| {
+        std.debug.print("[getTweet] json.parseFromSlice: {}\n", .{err});
+        return;
+    };
+    defer full_tweet.deinit();
+
+    const parsed_tweet = parseTweet(full_tweet.value);
+
+    const json = std.json.stringifyAlloc(self.alloc, parsed_tweet, .{}) catch |err| {
+        std.debug.print("[getTweet] json.stringifyAlloc: {}\n", .{err});
+        return;
+    };
+    defer self.alloc.free(json);
+
     r.sendJson(json) catch return;
+}
+
+// fn parseTweet(self: *Self, full_tweet: std.json.Value) !Tweet {
+fn parseTweet(full_tweet: std.json.Value) Tweet {
+    const t = full_tweet.object;
+
+    const tweet = Tweet{
+        .userName = t.get("user").?.object.get("name").?.string,
+        .displayName = t.get("user").?.object.get("screen_name").?.string,
+        .id = t.get("id_str").?.string,
+        .createDate = t.get("created_at").?.string,
+        .text = t.get("text").?.string,
+    };
+
+    // const parsed_tweet = std.json.parseFromValue(Tweet, self.alloc, full_tweet, .{}) catch |err| {
+    //     std.debug.print("[parseTweet] error: {}\n", .{err});
+    //     return err;
+    // };
+    // _ = parsed_tweet;
+
+    return tweet;
 }
