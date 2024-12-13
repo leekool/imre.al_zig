@@ -5,6 +5,7 @@ const zap = @import("zap");
 
 const Element = @import("html/element.zig");
 const PriceWeb = @import("price_web.zig");
+const XWeb = @import("x_web.zig");
 const Dom = @import("html/dom.zig");
 
 fn onRequest(r: zap.Request) void {
@@ -35,8 +36,10 @@ pub fn main() !void {
     defer listener.deinit();
 
     var priceWeb = PriceWeb.init(allocator, "/api/price");
+    var xWeb = XWeb.init(allocator, "/api/x");
 
     try listener.register(priceWeb.endpoint());
+    try listener.register(xWeb.endpoint());
     try listener.listen();
 
     std.debug.print("listening on 127.0.0.1:3000\n", .{});
