@@ -88,7 +88,10 @@ fn parseTweet(x_tweet: std.json.Value, a: std.mem.Allocator) !Tweet {
 
 // todo: handle multiple media items
 fn getMedia(x_tweet: std.json.Value, dom: *Dom, a: std.mem.Allocator) !?Tweet.Media {
-    const media_arr = x_tweet.object.get("mediaDetails").?.array;
+    const media_details = x_tweet.object.get("mediaDetails");
+    if (media_details == null) return null;
+
+    const media_arr = media_details.?.array;
     if (media_arr.items.len == 0) return null;
 
     var url = media_arr.items[0].object.get("media_url_https").?.string;
