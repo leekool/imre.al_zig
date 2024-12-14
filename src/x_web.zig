@@ -39,13 +39,13 @@ fn getTweet(e: *zap.Endpoint, r: zap.Request) void {
 
     dom.getHtml(url) catch return;
 
-    const full_tweet = std.json.parseFromSlice(std.json.Value, self.alloc, dom.html orelse return, .{}) catch |err| {
+    const x_tweet = std.json.parseFromSlice(std.json.Value, self.alloc, dom.html orelse return, .{}) catch |err| {
         std.debug.print("[getTweet] json.parseFromSlice: {}\n", .{err});
         return;
     };
-    defer full_tweet.deinit();
+    defer x_tweet.deinit();
 
-    const parsed_tweet = parseTweet(full_tweet.value);
+    const parsed_tweet = parseTweet(self, x_tweet.value) catch return;
 
     const json = std.json.stringifyAlloc(self.alloc, parsed_tweet, .{}) catch |err| {
         std.debug.print("[getTweet] json.stringifyAlloc: {}\n", .{err});
@@ -57,8 +57,8 @@ fn getTweet(e: *zap.Endpoint, r: zap.Request) void {
 }
 
 // fn parseTweet(self: *Self, full_tweet: std.json.Value) !Tweet {
-fn parseTweet(full_tweet: std.json.Value) Tweet {
-    const t = full_tweet.object;
+fn parseTweet(self: *Self, x_tweet: std.json.Value) !Tweet {
+    const t = x_tweet.object;
 
     const tweet = Tweet{
         .userName = t.get("user").?.object.get("name").?.string,
@@ -68,11 +68,42 @@ fn parseTweet(full_tweet: std.json.Value) Tweet {
         .text = t.get("text").?.string,
     };
 
-    // const parsed_tweet = std.json.parseFromValue(Tweet, self.alloc, full_tweet, .{}) catch |err| {
-    //     std.debug.print("[parseTweet] error: {}\n", .{err});
-    //     return err;
-    // };
-    // _ = parsed_tweet;
+    const media_arr = t.get("mediaDetails").?.array;
+    // todo: handle multiple media
+    if (media_arr.items.len > 0) {
+        const url_https = media_arr.items[0].object.get("media_url_https").?.string;
+
+        const http = url_https[0..4];
+        const url = url_https[5..];
+
+        const url_http = try std.mem.concat(self.alloc, u8, &[_][]const u8{http, url});
+        defer self.alloc.free(url_http);
+
+        try getMedia(self, url_http);
+    }
 
     return tweet;
+}
+
+fn getMedia(self: *Self, url: []const u8) !void {
+    var dom = Dom.init(self.alloc);
+    defer dom.deinit();
+
+    dom.getHtml(url) catch |err| {
+        std.debug.print("[getMedia] dom.getHtml: {}\n", .{err});
+        return;
+    };
+
+    const encoder = std.base64.standard.Encoder;
+    const encoded = try self.alloc.alloc(u8, encoder.calcSize(dom.html.?.len));
+    defer self.alloc.free(encoded);
+
+    _ = encoder.encode(encoded, dom.html.?);
+
+    std.debug.print("test {s}\n", .{encoded});
+
+    // var file = try std.fs.cwd().createFile("test.jpg", .{});
+    // defer file.close();
+    // const file_size = try file.write(dom.html.?);
+    // _ = file_size;
 }
