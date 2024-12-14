@@ -45,7 +45,8 @@ fn getTweet(e: *zap.Endpoint, r: zap.Request) void {
     };
     defer x_tweet.deinit();
 
-    const parsed_tweet = parseTweet(self, x_tweet.value) catch return;
+    var parsed_tweet = parseTweet(self, x_tweet.value) catch return;
+    defer parsed_tweet.deinit(self.alloc);
 
     const json = std.json.stringifyAlloc(self.alloc, parsed_tweet, .{}) catch |err| {
         std.debug.print("[getTweet] json.stringifyAlloc: {}\n", .{err});
@@ -60,7 +61,7 @@ fn getTweet(e: *zap.Endpoint, r: zap.Request) void {
 fn parseTweet(self: *Self, x_tweet: std.json.Value) !Tweet {
     const t = x_tweet.object;
 
-    const tweet = Tweet{
+    var tweet = Tweet{
         .userName = t.get("user").?.object.get("name").?.string,
         .displayName = t.get("user").?.object.get("screen_name").?.string,
         .id = t.get("id_str").?.string,
@@ -76,34 +77,42 @@ fn parseTweet(self: *Self, x_tweet: std.json.Value) !Tweet {
         const http = url_https[0..4];
         const url = url_https[5..];
 
-        const url_http = try std.mem.concat(self.alloc, u8, &[_][]const u8{http, url});
-        defer self.alloc.free(url_http);
+        const url_http = try std.mem.concat(self.alloc, u8, &[_][]const u8{ http, url });
+        // defer self.alloc.free(url_http);
 
-        try getMedia(self, url_http);
+        tweet.media = try getMedia(self, url_http);
     }
 
     return tweet;
 }
 
-fn getMedia(self: *Self, url: []const u8) !void {
+fn getMedia(self: *Self, media_url: []const u8) !?Tweet.Media {
     var dom = Dom.init(self.alloc);
     defer dom.deinit();
 
-    dom.getHtml(url) catch |err| {
+    dom.getHtml(media_url) catch |err| {
         std.debug.print("[getMedia] dom.getHtml: {}\n", .{err});
-        return;
+        return err;
     };
 
+    const binary = dom.html orelse return null;
     const encoder = std.base64.standard.Encoder;
-    const encoded = try self.alloc.alloc(u8, encoder.calcSize(dom.html.?.len));
-    defer self.alloc.free(encoded);
+    const encoded = try self.alloc.alloc(u8, encoder.calcSize(binary.len));
+    // defer self.alloc.free(encoded);
 
-    _ = encoder.encode(encoded, dom.html.?);
+    _ = encoder.encode(encoded, binary);
 
-    std.debug.print("test {s}\n", .{encoded});
+    var i = media_url.len;
+    while (i > 0) { // find last '.'
+        i -= 1;
+        if (media_url[i] == '.') break;
+    }
 
-    // var file = try std.fs.cwd().createFile("test.jpg", .{});
-    // defer file.close();
-    // const file_size = try file.write(dom.html.?);
-    // _ = file_size;
+    const file_type = media_url[i + 1 ..];
+
+    return Tweet.Media{
+        .url = media_url,
+        .base64 = encoded,
+        .file_type = file_type,
+    };
 }
