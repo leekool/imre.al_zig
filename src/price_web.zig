@@ -35,7 +35,7 @@ fn getPrices(e: *zap.Endpoint, r: zap.Request) void {
     var dom = Dom.init(self.alloc);
     defer dom.deinit();
 
-    dom.getHtml(url) catch return;
+    dom.getUrl(url) catch return;
     if (r.query != null) self.alloc.free(url);
 
     dom.getElements() catch return;

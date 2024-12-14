@@ -27,7 +27,7 @@ pub fn deinit(self: *Dom) void {
     self.elements.deinit();
 }
 
-pub fn getHtml(self: *Dom, url: []const u8) !void {
+pub fn getUrl(self: *Dom, url: []const u8) !void {
     var c = http.Client{ .allocator = self.alloc };
     defer c.deinit();
 
@@ -53,14 +53,15 @@ pub fn getHtml(self: *Dom, url: []const u8) !void {
     };
 
     const res = c.fetch(fetch_options) catch |err| {
-        std.debug.print("[getHtml] res: {}\n", .{err});
+        std.debug.print("[getUrl] res: {}\n", .{err});
         return err;
     };
 
     const body = try body_container.toOwnedSlice();
 
-    if (res.status != .ok) std.debug.print("[getHtml] res: {s}\n", .{body});
+    if (res.status != .ok) std.debug.print("[getUrl] res: {s}\n", .{body});
 
+    if (self.html != null) self.alloc.free(self.html.?); // cases where getUrl called twice
     self.html = body;
 }
 
