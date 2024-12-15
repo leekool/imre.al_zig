@@ -63,8 +63,8 @@ fn parseTweet(x_tweet: std.json.Value, a: std.mem.Allocator) !Tweet {
     const t = x_tweet.object;
 
     const tweet = Tweet{
-        .userName = try a.dupe(u8, t.get("user").?.object.get("name").?.string),
-        .displayName = try a.dupe(u8, t.get("user").?.object.get("screen_name").?.string),
+        .userName = try a.dupe(u8, t.get("user").?.object.get("screen_name").?.string),
+        .displayName = try a.dupe(u8, t.get("user").?.object.get("name").?.string),
         .id = try a.dupe(u8, t.get("id_str").?.string),
         .createDate = try a.dupe(u8, t.get("created_at").?.string),
         .text = try a.dupe(u8, t.get("text").?.string),
