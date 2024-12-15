@@ -27,6 +27,7 @@ pub fn deinit(self: *Dom) void {
     self.elements.deinit();
 }
 
+// todo: separate GET requests from Dom struct
 pub fn getUrl(self: *Dom, url: []const u8) !void {
     var c = http.Client{ .allocator = self.alloc };
     defer c.deinit();
