@@ -4,7 +4,7 @@ const Dom = @import("html/dom.zig");
 pub const Media = struct {
     url: []const u8,
     base64: []const u8,
-    file_type: []const u8,
+    fileType: []const u8,
 };
 
 pub const Tweet = @This();
@@ -15,8 +15,15 @@ id: []const u8,
 createDate: []const u8,
 text: []const u8,
 media: ?[]Media = null,
+quote: ?*Tweet = null,
 
-pub fn init(a: std.mem.Allocator, id: []const u8) !Tweet {
+const TweetErrors = error{
+    Invalid,
+    OutOfMemory,
+    FetchError,
+};
+
+pub fn init(a: std.mem.Allocator, id: []const u8) TweetErrors!Tweet {
     var dom = Dom.init(a);
     defer dom.deinit();
 
@@ -26,13 +33,14 @@ pub fn init(a: std.mem.Allocator, id: []const u8) !Tweet {
     const url = try std.mem.concat(a, u8, &[_][]const u8{ start, id, end });
     defer a.free(url);
 
-    try dom.getUrl(url);
+    dom.getUrl(url) catch return TweetErrors.FetchError;
 
-    const x_tweet = try std.json.parseFromSlice(std.json.Value, a, dom.html.?, .{});
+    const x_tweet = std.json.parseFromSlice(std.json.Value, a, dom.html.?, .{}) catch return TweetErrors.Invalid;
     defer x_tweet.deinit();
 
     var tweet = try parseTweet(x_tweet.value, a);
-    try getMedia(&tweet, x_tweet.value, &dom, a);
+    getMedia(&tweet, x_tweet.value, &dom, a) catch return TweetErrors.Invalid;
+    getQuote(&tweet, x_tweet.value, a) catch return TweetErrors.Invalid;
 
     return tweet;
 }
@@ -51,6 +59,11 @@ pub fn deinit(self: *Tweet, a: std.mem.Allocator) void {
         }
 
         a.free(self.media.?);
+    }
+
+    if (self.quote) |quote_ptr| {
+        quote_ptr.deinit(a);
+        a.destroy(quote_ptr);
     }
 }
 
@@ -83,7 +96,7 @@ fn getMedia(tweet: *Tweet, x_tweet: std.json.Value, dom: *Dom, a: std.mem.Alloca
     var buf = std.ArrayList(Media).init(a);
     defer buf.deinit();
 
-    for (media_arr.items) | m| {
+    for (media_arr.items) |m| {
         var url = m.object.get("media_url_https").?.string;
         if (std.mem.indexOf(u8, url, "https") != null) {
             const http = url[0..4];
@@ -109,9 +122,22 @@ fn getMedia(tweet: *Tweet, x_tweet: std.json.Value, dom: *Dom, a: std.mem.Alloca
         try buf.append(Tweet.Media{
             .url = url,
             .base64 = base64,
-            .file_type = file_type,
+            .fileType = file_type,
         });
     }
 
     tweet.media = try buf.toOwnedSlice();
+}
+
+fn getQuote(tweet: *Tweet, x_tweet: std.json.Value, a: std.mem.Allocator) !void {
+    const quote_obj = x_tweet.object.get("quoted_tweet");
+    if (quote_obj == null) return;
+
+    const id = quote_obj.?.object.get("id_str").?.string;
+
+    const quoted_tweet = try Tweet.init(a, id);
+    const quote_ptr = try a.create(Tweet);
+
+    quote_ptr.* = quoted_tweet;
+    tweet.quote = quote_ptr;
 }

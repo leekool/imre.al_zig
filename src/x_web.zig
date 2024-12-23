@@ -26,15 +26,17 @@ fn getTweet(e: *zap.Endpoint, r: zap.Request) void {
     if (path.len <= e.settings.path.len + 2 or path[e.settings.path.len] != '/') return;
 
     const tweet_id = path[e.settings.path.len + 1 ..];
-    var tweet = Tweet.init(self.alloc, tweet_id) catch |err| {
-        std.debug.print("[getTweet] Tweet.init: {}\n", .{err});
-        return;
-    };
+    // var tweet = Tweet.init(self.alloc, tweet_id) catch |err| {
+    //     std.debug.print("[getTweet] Tweet.init: {}\n", .{err});
+    //     return;
+    // };
+    var tweet = Tweet.init(self.alloc, tweet_id) catch return;
     defer tweet.deinit(self.alloc);
 
     const json = tweet.stringify(self.alloc) catch return;
     defer self.alloc.free(json);
 
+    r.setHeader("Access-Control-Allow-Origin", "https://x.imre.al") catch return;
     r.sendJson(json) catch |err| {
         std.debug.print("[getTweet] r.sendJson: {}\n", .{err});
         return;
